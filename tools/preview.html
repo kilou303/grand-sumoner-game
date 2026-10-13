@@ -1,0 +1,76 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Aperçu des sprites</title>
+<style>
+  body { margin: 0; background: #2a2440; }
+  canvas { image-rendering: pixelated; display: block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script src="../src/core/util.js"></script>
+<script src="../src/gfx/pixelart.js"></script>
+<script src="../src/gfx/heroes.js"></script>
+<script src="../src/gfx/monsters.js" onerror="void 0"></script>
+<script src="../src/data/elements.js" onerror="void 0"></script>
+<script src="../src/data/units.js" onerror="void 0"></script>
+<script src="../src/data/enemies.js" onerror="void 0"></script>
+<script>
+  // Aperçu : tous les héros puis les monstres, à l'échelle x4.
+  const S = 4;
+  const c = document.getElementById('c');
+  c.width = 1152; c.height = 648;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = '#3a3458'; ctx.fillRect(0, 0, c.width, c.height);
+  const looks = [];
+  if (GS.UNITS) for (const u of GS.UNITS) looks.push([u.id, u.look]);
+  else {
+    const T = [
+      ['spiky','tunic','sword',{hair:'#f0f0ff',main:'#3050a0',eye:'#3080e0'},{scarf:true}],
+      ['long','coat','scythe',{hair:'#5a3a90',main:'#2a2038',eye:'#e04070',skin:'#f8dcc8'},{}],
+      ['ponytail','robe','staff',{hair:'#e05030',main:'#b02838',second:'#f0c060',eye:'#f0a020'},{}],
+      ['long','robe','spear',{hair:'#60b0f0',main:'#f0f4ff',second:'#4080d0',eye:'#2060c0'},{}],
+      ['mane','heavy','hammer',{hair:'#3a6a30',main:'#5a8040',second:'#6a4a30',skin:'#c88a60',eye:'#40c060'},{}],
+      ['helmet','armor','sword',{metal:'#b8c4d8',main:'#3a7a40',eye:'#40a040'},{cape:'cape'}],
+      ['bob','tunic','bow',{hair:'#f0d060',main:'#f0f0e0',second:'#806040',eye:'#40a0e0'},{}],
+      ['hood','coat','dagger',{hair:'#404060',main:'#303048',cape:'#583878',eye:'#c040ff'},{}],
+      ['mane','heavy','axe',{hair:'#c02020',main:'#803020',skin:'#e0a880'},{acc:'headband'}],
+      ['twintails','tunic','rapier',{hair:'#40c0c0',main:'#2060a0',eye:'#20a0a0'},{}],
+      ['short','robe','staff',{hair:'#8a5030',main:'#d06020',eye:'#a05020'},{}],
+      ['skull','bones','sword',{metal:'#e8e0d0',accent:'#ff3040'},{}],
+    ];
+    T.forEach((t,i)=>looks.push(['t'+i, Object.assign({hair:t[0]==='skull'?null:t[0], head:t[0]==='skull'?'skull':null, body:t[1], weapon:t[2], colors:t[3]}, t[4])]));
+  }
+  let x = 8, y = 8;
+  const mode = location.hash.slice(1);
+  if (mode !== 'monsters') {
+    for (const [key, look] of looks) {
+      const sp = GS.HeroArt.build(key, look);
+      const ox = x, oy = y;
+      ctx.drawImage(sp.body, ox, oy, sp.w * S, sp.h * S);
+      if (sp.weapon) {
+        ctx.save();
+        ctx.translate(ox + sp.hand.x * S, oy + sp.hand.y * S);
+        ctx.rotate(0.5);
+        ctx.drawImage(sp.weapon, -sp.grip[0] * S, -sp.grip[1] * S, sp.weapon.width * S, sp.weapon.height * S);
+        ctx.restore();
+      }
+      x += 140;
+      if (x > c.width - 130) { x = 8; y += 160; }
+    }
+  }
+  if (GS.MonsterArt && mode !== 'heroes') {
+    if (mode === 'monsters') { x = 8; y = 8; } else { x = 8; y += 160; }
+    for (const key of Object.keys(GS.MonsterArt.DEFS)) {
+      const sp = GS.MonsterArt.build(key, key);
+      ctx.drawImage(sp.body, x, y, sp.w * 3, sp.h * 3);
+      x += sp.w * 3 + 12;
+      if (x > c.width - 150) { x = 8; y += 150; }
+    }
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <meta name="theme-color" content="#05030c">
+  <title>Astral Summoners</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="game" width="480" height="270"></canvas>
+  <div id="rotate">Tourne ton téléphone à l'horizontale 📱↻</div>
+  <noscript>Ce jeu a besoin de JavaScript.</noscript>
+
+  <!-- moteur -->
+  <script src="src/core/util.js"></script>
+  <script src="src/core/renderer.js"></script>
+  <script src="src/core/font.js"></script>
+  <script src="src/core/input.js"></script>
+  <script src="src/core/audio.js"></script>
+  <script src="src/core/co.js"></script>
+  <script src="src/core/ui.js"></script>
+  <!-- graphismes -->
+  <script src="src/gfx/pixelart.js"></script>
+  <script src="src/gfx/heroes.js"></script>
+  <script src="src/gfx/monsters.js"></script>
+  <script src="src/gfx/modrig.js"></script>
+  <script src="src/gfx/djegui_art.js"></script>
+  <script src="src/gfx/djegui.js"></script>
+  <script src="src/gfx/art.js"></script>
+  <script src="src/gfx/backgrounds.js"></script>
+  <script src="src/gfx/icons.js"></script>
+  <script src="src/gfx/fx.js"></script>
+  <!-- données -->
+  <script src="src/data/elements.js"></script>
+  <script src="src/data/units.js"></script>
+  <script src="src/data/enemies.js"></script>
+  <script src="src/data/stages.js"></script>
+  <!-- logique -->
+  <script src="src/game/save.js"></script>
+  <script src="src/game/gacha.js"></script>
+  <script src="src/game/battle.js"></script>
+  <!-- écrans -->
+  <script src="src/scenes/title.js"></script>
+  <script src="src/scenes/home.js"></script>
+  <script src="src/scenes/battle.js"></script>
+  <script src="src/main.js"></script>
+</body>
+</html>

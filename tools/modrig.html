@@ -1,0 +1,38 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Animation modulaire</title>
+<style>body{margin:0;background:#141020}canvas{image-rendering:pixelated;display:block}</style></head>
+<body><canvas id="c"></canvas>
+<script src="../src/core/util.js"></script>
+<script src="../src/gfx/pixelart.js"></script>
+<script src="../src/gfx/modrig.js"></script>
+<script src="../src/gfx/djegui_art.js"></script>
+<script src="../src/gfx/djegui.js"></script>
+<script>
+  const q = new URLSearchParams(location.search);
+  const S = +(q.get('s') || 3);
+  const c = document.getElementById('c');
+  c.width = +(q.get('w') || 1600); c.height = +(q.get('h') || 900);
+  const ctx = c.getContext('2d'); ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = '#1c1830'; ctx.fillRect(0, 0, c.width, c.height);
+  const ch = GS.Djegui.rig();
+  let y = 6;
+  const row = (label, frames) => {
+    let x = 70;
+    ctx.fillStyle = '#fff'; ctx.font = '13px monospace'; ctx.fillText(label, 4, y + 14);
+    for (const f of frames) {
+      ctx.fillStyle = '#2a4a3a'; ctx.fillRect(x, y, f.canvas.width * S, f.canvas.height * S);
+      ctx.drawImage(f.canvas, x, y, f.canvas.width * S, f.canvas.height * S);
+      ctx.fillStyle = '#ff0'; ctx.fillRect(x, y + GS.ModRig.FOOT.y * S, f.canvas.width * S, 1);
+      x += f.canvas.width * S + 4;
+    }
+    y += frames[0].canvas.height * S + 6;
+  };
+  const mode = q.get('m') || 'cycles';
+  const cyc = (n) => { const C = GS.ModRig.CYCLES[n]; const o = []; for (let i = 0; i < C.frames; i++) o.push(ch.frame(C.pose(i / C.frames))); return o; };
+  if (mode === 'cycles') { row('idle', cyc('idle')); row('walk', cyc('walk')); row('run', cyc('run')); }
+  else {
+    const names = Object.keys(GS.ModRig.KEY);
+    const per = +(q.get('n') || 8);
+    for (let i = 0; i < names.length; i += per) row(names.slice(i, i + per).join(','), names.slice(i, i + per).map((n) => ch.frame(GS.ModRig.KEY[n])));
+  }
+</script></body></html>
