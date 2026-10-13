@@ -56,7 +56,7 @@
       let m = 1;
       if (this.has('defUp')) m += 0.45;
       if (this.has('defDown')) m -= 0.35;
-      return this.def * m;
+      return this.defense * m;
     }
     effSpd() {
       return this.spd * (this.has('spdUp') ? 1.3 : 1);
@@ -95,7 +95,7 @@
       element: def.element,
       maxHp: st.hp,
       atk: st.atk,
-      def: st.def,
+      defense: st.def,
       spd: st.spd,
       maxMp: st.mp,
       mp: Math.round(st.mp * 0.3),
@@ -112,8 +112,11 @@
     const def = GS.ENEMIES[key](el);
     const k = GS.stageScale(level);
     let sprite;
-    if (def.art[0] === 'm') sprite = GS.MonsterArt.build(key + (el || '') + JSON.stringify(def.art[2] || {}), def.art[1], def.art[2] || {});
-    else sprite = GS.MonsterArt.buildHumanoid(key, def.art[1], def.art[2] || 1);
+    // les monstres sont agrandis (x2 par défaut) pour être à l'échelle des héros grand format
+    if (def.art[0] === 'm') {
+      const o = Object.assign({ scale: 2 }, def.art[2] || {});
+      sprite = GS.MonsterArt.build(key + (el || '') + JSON.stringify(o), def.art[1], o);
+    } else sprite = GS.MonsterArt.buildHumanoid(key, def.art[1], def.art[2] || 2);
     const f = new Fighter({
       side: 'enemy',
       slot,
@@ -124,7 +127,7 @@
       boss: !!def.boss,
       maxHp: Math.round(def.hp * k),
       atk: Math.round(def.atk * k),
-      def: Math.round(def.def * k),
+      defense: Math.round(def.def * k),
       spd: def.spd,
       maxMp: 0,
       mp: 0,

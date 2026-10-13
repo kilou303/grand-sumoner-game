@@ -28,7 +28,7 @@
         joints: { hip: [14, 41], neck: [14, 15], shoulderF: [24, 19], shoulderB: [5, 20] },
         hipF: 4,
         hipB: -6,
-        outline: 'C',
+        outline: 'H',
       });
     }
     return rig;

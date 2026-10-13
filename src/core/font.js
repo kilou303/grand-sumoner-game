@@ -123,6 +123,11 @@
     }
     g.px = px;
   }
+  glyphs['’'] = glyphs["'"];
+  glyphs['★'] = glyphs['*'];
+  glyphs['‘'] = glyphs["'"];
+  glyphs['«'] = glyphs['<'];
+  glyphs['»'] = glyphs['>'];
   const charOf = (c) => (glyphs[c] ? c : null);
 
   F.width = (text, scale = 1) => {

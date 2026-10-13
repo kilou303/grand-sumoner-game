@@ -176,7 +176,8 @@
     R.gradV(x + 1, y + 1, w - 2, h - 2, U.rgba(el.dark, 0.9), 'rgba(6,10,20,0.95)');
     R.frame(x, y, w, h, col);
     if (o.selected) R.frame(x + 1, y + 1, w - 2, h - 2, '#ffffff');
-    UI.portrait(def, x + 1, y + 1, w - 2, h - 10, o.scale || 1, { focusY: o.focusY !== undefined ? o.focusY : 18 });
+    if (GS.Art.char(def).rig) GS.Art.portrait(def, x + 1, y + 1, w - 2, h - 10, o.scale || 1, { focusY: 12 });
+    else UI.portrait(def, x + 1, y + 1, w - 2, h - 10, (o.scale || 1) * 2, { focusY: 17 });
     GS.Icons.draw(def.element, x + 2, y + 2);
     R.rect(x + 1, y + h - 9, w - 2, 8, 'rgba(0,0,0,0.6)');
     if (o.level !== undefined) F().draw('NV' + o.level, x + 3, y + h - 8, { color: '#ffffff' });

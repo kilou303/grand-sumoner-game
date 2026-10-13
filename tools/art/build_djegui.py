@@ -285,11 +285,13 @@ def manual(g, ops, pal):
 # pivot = articulation d'attache (haut de la pièce), end = articulation suivante (coude, genou...).
 CUTS = {
     'head': {'rows': (0, 15), 'x': lambda y: (0, 28), 'pivot': (14, 15), 'end': (14, 15)},
-    'torso': {'rows': (15, 41), 'x': lambda y: (5, 23) if y <= 21 else (4, 22) if y >= 38 else (8, 20), 'pivot': (14, 41), 'end': (14, 15)},
-    'armUpF': {'rows': (18, 27), 'x': lambda y: (21, 28), 'pivot': (24, 19), 'end': (25, 27)},
-    'armLoF': {'rows': (27, 37), 'x': lambda y: (21, 28), 'pivot': (25, 27), 'end': (24, 36)},
-    'armUpB': {'rows': (19, 27), 'x': lambda y: (1, 7), 'pivot': (5, 20), 'end': (4, 27)},
-    'armLoB': {'rows': (27, 37), 'x': lambda y: (1, 7), 'pivot': (4, 27), 'end': (4, 36)},
+    'torso': {'rows': (15, 41), 'x': lambda y: (5, 23) if y <= 21 else (4, 22) if y >= 38 else (8, 20), 'pivot': (14, 41), 'end': (14, 15), 'nocrop': True},
+    # bras d'origine de la fiche, mains dans les poches (même repère que le torse)
+    'pocketF': {'rows': (15, 41), 'x': lambda y: (21, 28) if 18 <= y <= 37 else (99, 99), 'pivot': (14, 41), 'end': (14, 15), 'nocrop': True},
+    'pocketB': {'rows': (15, 41), 'x': lambda y: (1, 7) if 19 <= y <= 37 else (99, 99), 'pivot': (14, 41), 'end': (14, 15), 'nocrop': True},
+    # bras d'origine (texture de la fiche), découpés sans la poche ni la couture du torse
+    'armUpF': {'rows': (19, 27), 'x': lambda y: (22, 28), 'pivot': (25, 20), 'end': (25, 27)},
+    'armLoF': {'rows': (27, 33), 'x': lambda y: (21, 27), 'pivot': (24, 27), 'end': (24, 33)},
     'thighF': {'rows': (41, 47), 'x': lambda y: (15, 23), 'pivot': (19, 41), 'end': (19, 47)},
     'shinF': {'rows': (47, 54), 'x': lambda y: (15, 23), 'pivot': (19, 47), 'end': (19, 54)},
     'thighB': {'rows': (41, 47), 'x': lambda y: (3, 10), 'pivot': (6, 41), 'end': (6, 47)},
@@ -328,10 +330,13 @@ def build_parts(frames, pal):
         for y in range(y0, y1 + 1):
             xa, xb = c['x'](y)
             rows.append(''.join(src[y][x] if xa <= x <= xb and x < len(src[y]) else '.' for x in range(len(src[0]))))
-        # recadre horizontalement
-        xs = [x for x in range(len(rows[0])) if any(r[x] != '.' for r in rows)]
-        x0 = min(xs)
-        rows = [r[x0:max(xs) + 1] for r in rows]
+        # recadre horizontalement (sauf pièces alignées sur le torse)
+        if c.get('nocrop'):
+            x0 = 0
+        else:
+            xs = [x for x in range(len(rows[0])) if any(r[x] != '.' for r in rows)]
+            x0 = min(xs)
+            rows = [r[x0:max(xs) + 1] for r in rows]
         parts[name] = {'pivot': [c['pivot'][0] - x0, c['pivot'][1] - y0], 'end': [c['end'][0] - x0, c['end'][1] - y0], 't': rows}
     # retouche du visage (sous la capuche) : peau brune, deux yeux rouges, plus de bande noire.
     # k = ombre de la capuche, d/g/l = peau (sombre -> clair), e = rouge sombre, r = rouge vif.
@@ -353,6 +358,8 @@ def build_parts(frames, pal):
     for name, hdef in HAND.items():
         m = {k: nearest(v) for k, v in hdef['col'].items()}
         parts[name] = {'pivot': list(hdef['pivot']), 'end': list(hdef['end']), 't': [''.join(m.get(ch, '.') for ch in r) for r in hdef['t']]}
+    parts['armUpB'] = dict(parts['armUpF'])
+    parts['armLoB'] = dict(parts['armLoF'])
     return parts
 
 

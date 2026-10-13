@@ -112,17 +112,18 @@
       this.P = spec.art.parts;
       this.cache = new Map();
       this.L = { thigh: len(this.P.thighF), shin: len(this.P.shinF) };
-      // palette assombrie pour les membres arrière (profondeur)
+      // palette assombrie pour les membres arrière (profondeur) : couleur la plus proche
+      // d'une version assombrie de chaque teinte (garde la même famille de couleur)
       const pal = spec.art.pal;
       const keys = Object.keys(pal);
       this.shade = {};
       for (const k of keys) {
-        const L = lumOf(pal[k]);
+        const target = U.hexToRgb(U.shade(pal[k], -0.22));
         let best = k;
         let bd = 1e9;
         for (const k2 of keys) {
-          if (isWarm(pal[k2]) !== isWarm(pal[k])) continue;
-          const d = Math.abs(lumOf(pal[k2]) - L * 0.74);
+          const c = U.hexToRgb(pal[k2]);
+          const d = (c[0] - target[0]) ** 2 + (c[1] - target[1]) ** 2 + (c[2] - target[2]) ** 2;
           if (d < bd) {
             bd = d;
             best = k2;
@@ -164,18 +165,31 @@
       };
 
       // Torse d'abord dans une grille à part pour connaître les épaules.
+      // Les bras "mains dans les poches" de la fiche sont collés au torse (même cisaillement).
       const tp = P.torso;
       const tg = Pix.grid(CW, CH);
-      const map = stampTorso(tg, tp.t, tp.pivot[0] + 0.5, tp.pivot[1] + 0.5, hip.x, hip.y, lean, sy, pose.sway || 0, 5);
+      const pocketB = (pose.arms[0].hand || 'fist') === 'pocket';
+      const pocketF = (pose.arms[1].hand || 'fist') === 'pocket';
+      const torsoStamp = (part) => stampTorso(tg, P[part].t, P[part].pivot[0] + 0.5, P[part].pivot[1] + 0.5, hip.x, hip.y, lean, sy, pose.sway || 0, 5);
+      if (pocketB && P.pocketB) torsoStamp('pocketB');
+      const map = torsoStamp('torso');
+      if (pocketF && P.pocketF) torsoStamp('pocketF');
       const local = (j) => [j[0] - (J.hip[0] - tp.pivot[0]), j[1] - (J.hip[1] - tp.pivot[1])];
       const shF = map(...local(J.shoulderF));
       const shB = map(...local(J.shoulderB));
+      // rotation du buste : l'épaule arrière avance (coup du bras arrière, garde)
+      const tw = pose.twist || 0;
+      shB.x += tw * 13;
+      shB.y += tw * 1;
+      shF.x -= tw * 3;
       const neck = map(...local(J.neck));
 
       let handF = null;
       const drawArm = (arm, front) => {
+        if ((arm.hand || 'fist') === 'pocket' && P.pocketF) return;
         const sh = front ? shF : shB;
-        const mp = front ? null : this.shade;
+        // les deux bras sont identiques (même texture, pas d'assombrissement)
+        const mp = null;
         const upN = front ? 'armUpF' : 'armUpB';
         const loN = front ? 'armLoF' : 'armLoB';
         const u = limb(upN, sh.x, sh.y, arm.a, mp);
@@ -190,18 +204,18 @@
           const f = P.fist;
           cells = cells.concat(stampRot(g, f.t, f.pivot[0] + 0.5, f.pivot[1] + 0.5, hx, hy, -fa, mp));
         }
-        if (front) {
-          innerOutline(g, cells, sp.outline);
-          handF = { x: hx, y: hy, ang: fa };
-        }
+        if (front || pose.swap || pose.backArm === 'front') innerOutline(g, cells, sp.outline);
+        if (front) handF = { x: hx, y: hy, ang: fa };
       };
 
-      if (!pose.swap) drawArm(pose.arms[0], false);
+      const backBehind = !pose.swap && pose.backArm !== 'front';
+      if (backBehind) drawArm(pose.arms[0], false);
       drawLeg(pose.legs[0], false);
       drawLeg(pose.legs[1], true);
       for (let y = 0; y < CH; y++) for (let x = 0; x < CW; x++) if (tg[y][x] !== '.') g[y][x] = tg[y][x];
       const hp = P.head;
       stampRot(g, hp.t, hp.pivot[0] + 0.5, hp.pivot[1] + 0.5, neck.x + (pose.hx || 0), neck.y + (pose.hy || 0), (pose.tilt || 0) + lean * 0.5);
+      if (!backBehind && !pose.swap) drawArm(pose.arms[0], false);
       drawArm(pose.arms[1], true);
       if (pose.swap) drawArm(pose.arms[0], false);
 
@@ -240,6 +254,8 @@
   function quant(p) {
     return {
       swap: !!p.swap,
+      backArm: p.backArm || 'behind',
+      twist: q1(p.twist),
       x: Math.round(p.x || 0),
       y: Math.round(p.y || 0),
       lean: q1(p.lean),
@@ -256,6 +272,8 @@
   const lerp = U.lerp;
   M.blend = (p, q, t) => ({
     swap: t < 0.5 ? p.swap : q.swap,
+    backArm: t < 0.5 ? p.backArm : q.backArm,
+    twist: lerp(p.twist || 0, q.twist || 0, t),
     x: lerp(p.x || 0, q.x || 0, t),
     y: lerp(p.y || 0, q.y || 0, t),
     lean: lerp(p.lean || 0, q.lean || 0, t),
@@ -271,30 +289,36 @@
   // ------------------------------------------------------------ poses-clés
   // Angles : 0 = vers le bas, positif = vers l'avant (droite). [arrière, avant].
   // k = flexion du genou, e = flexion du coude, toe = rotation du pied.
+  const PK = { a: 0, e: 0, hand: 'pocket' };
+  const PP = [PK, PK];
   const K = (M.KEY = {
-    idle: { legs: [{ a: -0.1, k: 0.04 }, { a: 0.12, k: 0.04 }], arms: [{ a: 0, e: 0, hand: 'pocket' }, { a: 0, e: 0, hand: 'pocket' }] },
-    // garde de combat (idle en bataille)
-    guard: { lean: 0.1, x: -1, legs: [{ a: -0.5, k: 0.5 }, { a: 0.42, k: 0.62 }], arms: [{ a: 0.75, e: 1.85 }, { a: 0.5, e: 2.15 }] },
-    guard2: { lean: 0.08, x: -1, y: 1, squash: -0.03, legs: [{ a: -0.52, k: 0.62 }, { a: 0.44, k: 0.74 }], arms: [{ a: 0.7, e: 1.95 }, { a: 0.45, e: 2.25 }] },
-    crouch: { lean: 0.2, squash: -0.06, legs: [{ a: -0.7, k: 1.3 }, { a: 0.65, k: 1.45 }], arms: [{ a: 0.5, e: 1.7 }, { a: 0.3, e: 2.0 }] },
-    windup: { lean: -0.12, x: -3, sway: -1, legs: [{ a: -0.5, k: 0.5 }, { a: 0.36, k: 0.6 }], arms: [{ a: 0.6, e: 1.9 }, { a: -0.9, e: 2.0 }] },
-    jab: { lean: 0.3, x: 4, sway: 2, legs: [{ a: -0.7, k: 0.1 }, { a: 0.55, k: 0.45 }], arms: [{ a: 0.6, e: 1.9 }, { a: 1.6, e: 0.0 }] },
-    crossWind: { lean: 0.0, x: -1, legs: [{ a: -0.55, k: 0.45 }, { a: 0.45, k: 0.6 }], arms: [{ a: -0.4, e: 1.9 }, { a: 0.8, e: 2.0 }] },
-    cross: { swap: true, lean: 0.38, x: 6, sway: 2, legs: [{ a: -0.8, k: 0.05 }, { a: 0.6, k: 0.55 }], arms: [{ a: 1.6, e: 0.0 }, { a: 0.4, e: 2.1 }] },
-    upWind: { lean: 0.25, squash: -0.06, x: 1, legs: [{ a: -0.75, k: 1.2 }, { a: 0.6, k: 1.4 }], arms: [{ a: 0.6, e: 1.8 }, { a: 0.2, e: 2.5 }] },
-    uppercut: { lean: -0.05, y: -8, x: 3, squash: 0.06, legs: [{ a: -0.3, k: 0.2 }, { a: 0.5, k: 1.2 }], arms: [{ a: -0.4, e: 1.4 }, { a: 2.85, e: 0.15 }] },
-    kickPrep: { lean: -0.15, legs: [{ a: -0.15, k: 0.3 }, { a: 1.2, k: 2.1 }], arms: [{ a: 0.8, e: 1.8 }, { a: -0.6, e: 1.6 }] },
-    kick: { lean: -0.32, x: -2, sway: -2, legs: [{ a: -0.25, k: 0.15 }, { a: 1.7, k: 0.0, toe: -0.8 }], arms: [{ a: 1.0, e: 1.5 }, { a: -0.9, e: 1.1 }] },
-    airKick: { lean: -0.25, y: -14, sway: -2, legs: [{ a: 0.4, k: 1.7 }, { a: 1.75, k: 0.0, toe: -0.8 }], arms: [{ a: 1.1, e: 1.4 }, { a: -1.0, e: 1.0 }] },
-    hurt: { lean: -0.32, x: -4, tilt: -0.2, sway: -2, legs: [{ a: -0.35, k: 0.55 }, { a: 0.4, k: 0.7 }], arms: [{ a: -0.85, e: 0.5, hand: 'fist' }, { a: -0.55, e: 0.8 }] },
-    ko: { lean: -0.25, tilt: 0.25, legs: [{ a: -0.6, k: 1.2 }, { a: 0.5, k: 1.4 }], arms: [{ a: -0.5, e: 0.3 }, { a: 0.4, e: 0.5 }] },
+    idle: { legs: [{ a: -0.1, k: 0.04 }, { a: 0.12, k: 0.04 }], arms: PP },
+    // attitude de combat : mains dans les poches, appui sur la jambe arrière
+    guard: { lean: 0.04, x: -1, legs: [{ a: -0.34, k: 0.22 }, { a: 0.26, k: 0.3 }], arms: PP },
+    guard2: { lean: 0.02, x: -1, y: 1, squash: -0.02, legs: [{ a: -0.36, k: 0.32 }, { a: 0.28, k: 0.4 }], arms: PP },
+    crouch: { lean: 0.22, squash: -0.06, legs: [{ a: -0.7, k: 1.3 }, { a: 0.65, k: 1.45 }], arms: PP },
+    // direct du bras avant
+    windup: { lean: -0.1, x: -3, sway: -1, legs: [{ a: -0.5, k: 0.5 }, { a: 0.36, k: 0.6 }], arms: [PK, { a: -0.9, e: 2.0 }] },
+    jab: { lean: 0.3, x: 4, sway: 2, legs: [{ a: -0.7, k: 0.1 }, { a: 0.55, k: 0.45 }], arms: [PK, { a: 1.6, e: 0.0 }] },
+    // cross du bras arrière (le bras avant reste dans la poche)
+    crossWind: { swap: true, twist: 0.4, lean: -0.02, x: -1, legs: [{ a: -0.55, k: 0.45 }, { a: 0.45, k: 0.6 }], arms: [{ a: -0.6, e: 1.6 }, PK] },
+    cross: { swap: true, twist: 1, lean: 0.38, x: 6, sway: 2, legs: [{ a: -0.8, k: 0.05 }, { a: 0.6, k: 0.55 }], arms: [{ a: 1.6, e: 0.0 }, PK] },
+    upWind: { lean: 0.25, squash: -0.06, x: 1, legs: [{ a: -0.75, k: 1.2 }, { a: 0.6, k: 1.4 }], arms: [PK, { a: 0.3, e: 2.4 }] },
+    uppercut: { lean: -0.05, y: -8, x: 3, squash: 0.06, legs: [{ a: -0.3, k: 0.2 }, { a: 0.5, k: 1.2 }], arms: [PK, { a: 2.85, e: 0.15 }] },
+    // coups de pied, mains dans les poches
+    kickPrep: { lean: -0.15, legs: [{ a: -0.15, k: 0.3 }, { a: 1.2, k: 2.1 }], arms: PP },
+    kick: { lean: -0.32, x: -2, sway: -2, legs: [{ a: -0.25, k: 0.15 }, { a: 1.7, k: 0.0, toe: -0.8 }], arms: PP },
+    airKick: { lean: -0.25, y: -14, sway: -2, legs: [{ a: 0.4, k: 1.7 }, { a: 1.75, k: 0.0, toe: -0.8 }], arms: PP },
+    hurt: { lean: -0.3, x: -4, tilt: -0.2, sway: -2, legs: [{ a: -0.35, k: 0.55 }, { a: 0.4, k: 0.7 }], arms: PP },
+    ko: { lean: -0.25, tilt: 0.25, legs: [{ a: -0.6, k: 1.2 }, { a: 0.5, k: 1.4 }], arms: PP },
     // pose de pouvoir (fiche) : accroupi, une main au sol, poing tendu
-    power: { lean: 0.42, x: 3, tilt: 0.05, squash: -0.05, legs: [{ a: -1.15, k: 0.3 }, { a: 1.05, k: 2.0 }], arms: [{ a: 0.15, e: -0.1, hand: 'fist' }, { a: 1.5, e: 0.0 }] },
-    cast: { lean: -0.05, legs: [{ a: -0.35, k: 0.2 }, { a: 0.35, k: 0.25 }], arms: [{ a: 0.6, e: 0.8 }, { a: 2.5, e: 0.3 }] },
-    victory: { legs: [{ a: -0.15, k: 0.04 }, { a: 0.15, k: 0.04 }], arms: [{ a: 0, e: 0, hand: 'pocket' }, { a: 3.0, e: 0.1 }] },
-    jump: { lean: 0.15, y: -10, legs: [{ a: 0.6, k: 1.7 }, { a: 1.1, k: 2.0 }], arms: [{ a: -0.7, e: 1.0 }, { a: 1.0, e: 1.4 }] },
-    land: { lean: 0.25, squash: -0.08, legs: [{ a: -0.8, k: 1.5 }, { a: 0.7, k: 1.6 }], arms: [{ a: -0.4, e: 0.8 }, { a: 0.9, e: 1.0 }] },
-    dash: { lean: 0.5, sway: -3, legs: [{ a: -1.1, k: 0.45 }, { a: 0.75, k: 1.4 }], arms: [{ a: -1.0, e: 0.5 }, { a: 0.7, e: 1.8 }] },
+    power: { backArm: 'front', twist: 0.6, lean: 0.42, x: 3, tilt: 0.05, squash: -0.05, legs: [{ a: -1.15, k: 0.3 }, { a: 1.05, k: 2.0 }], arms: [{ a: 0.15, e: -0.1, hand: 'fist' }, { a: 1.5, e: 0.0 }] },
+    // regard écarlate : il fixe l'ennemi, mains dans les poches
+    cast: { lean: -0.06, tilt: 0.06, legs: [{ a: -0.3, k: 0.15 }, { a: 0.3, k: 0.2 }], arms: PP },
+    victory: { tilt: -0.1, legs: [{ a: -0.15, k: 0.04 }, { a: 0.15, k: 0.04 }], arms: PP },
+    jump: { lean: 0.15, y: -10, legs: [{ a: 0.6, k: 1.7 }, { a: 1.1, k: 2.0 }], arms: PP },
+    land: { lean: 0.25, squash: -0.08, legs: [{ a: -0.8, k: 1.5 }, { a: 0.7, k: 1.6 }], arms: PP },
+    dash: { lean: 0.5, sway: -3, legs: [{ a: -1.1, k: 0.45 }, { a: 0.75, k: 1.4 }], arms: PP },
   });
 
   // ------------------------------------------------------------ cycles
@@ -311,7 +335,7 @@
     // garde rebondissante façon jeu de combat
     stance: {
       frames: 6,
-      dur: 0.9,
+      dur: 1.2,
       pose: (p) => M.blend(K.guard, K.guard2, (1 - Math.cos(p * TAU)) / 2),
     },
     walk: {
@@ -322,17 +346,15 @@
         const c = Math.cos(p * TAU);
         return {
           y: Math.abs(s) < 0.5 ? 0 : -1,
-          lean: 0.08,
+          lean: 0.06,
           sway: Math.round(-s * 1.2),
+          tilt: s * 0.03,
           x: c * 0.6,
           legs: [
             { a: -0.48 * s, k: 0.1 + 0.85 * Math.max(0, -c), toe: s > 0.6 ? 0.5 : 0 },
             { a: 0.48 * s, k: 0.1 + 0.85 * Math.max(0, c), toe: s < -0.6 ? 0.5 : 0 },
           ],
-          arms: [
-            { a: 0.42 * s, e: 0.35 + 0.25 * Math.max(0, s) },
-            { a: -0.42 * s, e: 0.35 + 0.25 * Math.max(0, -s) },
-          ],
+          arms: PP,
         };
       },
     },
@@ -344,17 +366,14 @@
         const c = Math.cos(p * TAU);
         return {
           y: -Math.abs(c) * 3 + 1.5,
-          lean: 0.42,
+          lean: 0.36,
           x: 3,
-          sway: Math.round(-2 - s),
+          sway: Math.round(-2 - s * 1.5),
           legs: [
             { a: -0.95 * s + 0.15, k: 0.35 + 1.65 * Math.max(0, -c), toe: 0.3 * Math.max(0, s) },
             { a: 0.95 * s + 0.15, k: 0.35 + 1.65 * Math.max(0, c), toe: 0.3 * Math.max(0, -s) },
           ],
-          arms: [
-            { a: 1.0 * s + 0.2, e: 1.7 },
-            { a: -1.0 * s + 0.2, e: 1.7 },
-          ],
+          arms: PP,
         };
       },
     },

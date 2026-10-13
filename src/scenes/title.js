@@ -26,17 +26,21 @@
       }
     }
     draw(ctx) {
-      GS.BG.draw('castle', this.t, Math.sin(this.t * 0.2) * 10, 0);
-      R.fade(0.25, '#05030c');
+      GS.BG.draw('castle', this.t, this.t * 10, 0);
+      R.fade(0.3, '#05030c');
       this.fx.draw(ctx);
       const lead = GS.UNIT.djegui || GS.UNITS[0];
-      GS.UI.rays(GS.W / 2, 150, '#ff3048', this.t, 14, 260, 0.06);
-      GS.Art.drawUnit(lead, GS.W / 2, 172, { scale: 2, anim: 'idle', t: this.t });
-      const y = 28 + Math.sin(this.t * 2) * 2;
+      GS.UI.rays(GS.W / 2, 200, '#ff3048', this.t, 14, 300, 0.07);
+      R.ellipse(GS.W / 2, 262, 44, 6, 'rgba(0,0,0,0.5)');
+      GS.Art.drawUnit(lead, GS.W / 2, 262, { scale: 2, anim: 'idle', t: this.t });
+      const y = 18 + Math.sin(this.t * 2) * 2;
       F().draw('ASTRAL', GS.W / 2, y, { color: '#ffffff', outline: '#2a1050', scale: 4, align: 'center' });
       F().draw('SUMMONERS', GS.W / 2, y + 30, { color: GS.rainbow(this.t * 0.5), outline: '#2a1050', scale: 3, align: 'center' });
       F().draw("Chroniques d'Ether", GS.W / 2, y + 56, { color: '#c8b0ff', outline: '#05030c', align: 'center' });
-      if (Math.sin(this.t * 4) > -0.3) F().draw('Touche pour commencer', GS.W / 2, 196, { color: '#ffffff', outline: '#05030c', align: 'center' });
+      if (Math.sin(this.t * 4) > -0.3) {
+        R.panel(GS.W - 150, 226, 140, 18, { cut: 5 });
+        F().draw('Touche pour commencer', GS.W - 80, 232, { color: '#ffffff', align: 'center' });
+      }
       F().draw('v1.0', GS.W - 4, GS.H - 10, { color: '#6a6090', align: 'right' });
     }
   }
