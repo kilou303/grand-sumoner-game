@@ -212,10 +212,13 @@
       for (const a of accs) stampAcc(parts.head.g, a, -3, 2);
     } else {
       const H = GS.HEADS;
-      const g = GS.Pix.grid(24, 21);
-      GS.Pix.stamp(g, H.face, 1, 2);
-      GS.Pix.stamp(g, H[spec.head] || H.short, 1, 0);
-      if (accs.includes('elf')) GS.Pix.stamp(g, H.elf, 1, 2);
+      // tête façon JUS : grille 20 x 18, cou en (10, 17), aplats nets (pas de bruit)
+      const g = GS.Pix.grid(20, 18);
+      GS.Pix.stamp(g, H.face, 0, 0);
+      GS.Pix.stamp(g, H[spec.head] || H.short, 0, 0);
+      if (accs.includes('elf')) GS.Pix.stamp(g, H.elf, 0, 0);
+      // ombre portée des mèches sur le front (ombrage en aplats façon JUS)
+      for (let y = g.h - 1; y > 0; y--) for (let x = 0; x < g.w; x++) if (g[y][x] === 'b' && '12345'.includes(g[y - 1][x])) g[y][x] = 'a';
       const hair = V.ramp(spec.hair || '#5a3a22');
       const metal = V.ramp(spec.metal || '#b8c4d8');
       const cmap = {
@@ -225,26 +228,20 @@
         r: metal[3], s: metal[4], t: metal[1],
         M: '#e8e4dc', n: '#a8a49c',
       };
-      // texture : quelques pixels de cheveux décalés d'un ton (rendu proche de la fiche)
-      const rng = U.seeded(spec.head.length * 97 + (spec.hair || '').length * 13);
-      const tex = (ch) => {
-        if (ch >= '2' && ch <= '4' && rng() < 0.22) return String.fromCharCode(ch.charCodeAt(0) + (rng() < 0.5 ? -1 : 1));
-        return ch;
-      };
       const toColors = (grid) => {
         const t = [];
-        for (let y = 0; y < grid.h; y++) t.push(grid[y].map((ch) => (ch === '.' ? null : cmap[tex(ch)] || '#ff00ff')));
+        for (let y = 0; y < grid.h; y++) t.push(grid[y].map((ch) => (ch === '.' ? null : cmap[ch] || '#ff00ff')));
         return t;
       };
       const hg = toColors(g);
-      for (const a of accs) stampAcc(hg, a, 1, 2);
-      parts.head = { pivot: [11, 19], end: [11, 19], g: hg };
+      for (const a of accs) stampAcc(hg, a, 0, 0);
+      parts.head = { pivot: [10, 17], end: [10, 17], g: hg };
       const back = H[spec.head + 'Back'];
       if (back) {
-        // décalée vers l'arrière pour dépasser derrière l'épaule
-        const gb = GS.Pix.grid(26, back.length);
-        GS.Pix.stamp(gb, back, 1, 0);
-        parts.hairBack = { pivot: [16, 19], end: [16, 19], g: toColors(gb) };
+        // grille plus large, décalée vers l'arrière pour dépasser derrière l'épaule
+        const gb = GS.Pix.grid(24, back.length);
+        GS.Pix.stamp(gb, back, 0, 0);
+        parts.hairBack = { pivot: [14, 17], end: [14, 17], g: toColors(gb) };
       }
     }
     // conversion en palette

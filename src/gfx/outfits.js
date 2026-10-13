@@ -358,15 +358,17 @@
   };
 
   // ------------------------------------------------------------ accessoires de tête
-  // Gabarits dans le repère du visage (22 x 18, posé en (1, 2) dans la tête).
   O.HEAD_ACC = {
-    glasses: { label: 'Lunettes', t: ['', '', '', '', '', '', '', '', '.......gggg..gggg.....', '...ggggg..gggg..g.....', '.......g..g..g..g.....', '.......gggg..gggg.....'] },
-    shades: { label: 'Lunettes noires', t: ['', '', '', '', '', '', '', '', '.......GGGG..GGGG.....', '...gggGGGGggGGGG.....', '.......GGGG..GGGG.....', '........GG....GG......'] },
-    blindfold: { label: 'Bandeau sur les yeux', t: ['', '', '', '', '', '', '', '', '...BBBBBBBBBBBBBBBBB..', '.BBBBBBBBBBBBBBBBBBB..', 'BB.BBBBBBBBBBBBBBBBB..', 'B..BBBBBBBBBBBBBBBBB..', 'B.....................'] },
-    headband: { label: 'Bandeau', t: ['', '', '', '', '', '...BBBBBBBBBBBBBBBB...', '..BBBBBBBBBBBBBBBBB...', 'B.....................', 'BB....................'] },
-    scar: { label: 'Cicatrice', t: ['', '', '', '', '', '', '', '', '...............r......', '..............r.......', '...............r......', '..............r.......', '...............r......'] },
-    collar: { label: 'Col montant', t: ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '.....CCCCCCCCCCCCC....', '....CCCCCCCCCCCCCC....', '....CCCCCCCCCCCCCC....', '.....CCCCCCCCCCCCC....'] },
+    glasses: { label: 'Lunettes' },
+    shades: { label: 'Lunettes noires' },
+    blindfold: { label: 'Bandeau sur les yeux' },
+    headband: { label: 'Bandeau' },
+    scar: { label: 'Cicatrice' },
+    collar: { label: 'Col montant' },
   };
+  // gabarits dessinés dans heads.js (même grille que le visage)
+  for (const k of Object.keys(O.HEAD_ACC)) O.HEAD_ACC[k].t = GS.HEAD_ACC_T[k];
+
 
   // Ajoute une jupe sous un torse existant (doudoune de la fiche).
   O.addSkirt = (g0, ramp) => {
