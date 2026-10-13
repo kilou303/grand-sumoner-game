@@ -202,9 +202,35 @@
       const pocketB = (pose.arms[0].hand || 'fist') === 'pocket' && P.pocketB && intact('B');
       const pocketF = (pose.arms[1].hand || 'fist') === 'pocket' && P.pocketF && intact('F');
       const torsoStamp = (part) => stampTorso(tg, P[part].t, P[part].pivot[0] + 0.5, P[part].pivot[1] + 0.5, hip.x, hip.y, lean, sy, pose.sway || 0, 5, pose.hipLean);
+      // bras avant derrière le torse (tous sauf Djegui) : sa poche passe sous le torse
+      const under = sp.frontArm === 'under';
       if (pocketB) torsoStamp('pocketB');
+      let pg = null;
+      if (pocketF && under) {
+        pg = Pix.grid(CW, CH);
+        stampTorso(pg, P.pocketF.t, P.pocketF.pivot[0] + 0.5, P.pocketF.pivot[1] + 0.5, hip.x, hip.y, lean, sy, pose.sway || 0, 5, pose.hipLean);
+      }
       const map = torsoStamp('torso');
-      if (pocketF) torsoStamp('pocketF');
+      if (pocketF && !under) torsoStamp('pocketF');
+      // liseré sombre là où le bras passe sous le bord du torse
+      const seamUnder = (grid, cells) => {
+        for (const id of cells) {
+          const x = id % CW;
+          const y = (id - x) / CW;
+          if (tg[y][x] !== '.') continue;
+          if ((x > 0 && tg[y][x - 1] !== '.') || (x < CW - 1 && tg[y][x + 1] !== '.') || (y > 0 && tg[y - 1][x] !== '.') || (y < CH - 1 && tg[y + 1][x] !== '.')) grid[y][x] = sp.outline;
+        }
+      };
+      if (pg) {
+        const cells = [];
+        for (let y = 0; y < CH; y++) for (let x = 0; x < CW; x++) if (pg[y][x] !== '.' && tg[y][x] === '.') cells.push(y * CW + x);
+        seamUnder(pg, cells);
+        for (const id of cells) {
+          const x = id % CW;
+          const y = (id - x) / CW;
+          tg[y][x] = pg[y][x];
+        }
+      }
       const local = (j) => [j[0] - (J.hip[0] - tp.pivot[0]), j[1] - (J.hip[1] - tp.pivot[1])];
       const shF = map(...local(J.shoulderF));
       const shB = map(...local(J.shoulderB));
@@ -224,11 +250,11 @@
         pts['sh' + side] = sh;
         if (lost['arm' + side]) {
           stumps.push([sh.x, sh.y, 4, 4]);
-          return;
+          return [];
         }
         let hand = arm.hand || 'fist';
         if (hand === 'pocket') {
-          if (front ? pocketF : pocketB) return;
+          if (front ? pocketF : pocketB) return [];
           // bras mutilé : il pend le long du corps
           arm = { a: front ? -0.12 : 0.12, e: front ? 0.2 : -0.2, hand: 'fist' };
           hand = 'fist';
@@ -263,12 +289,15 @@
           }
         }
         if (front || pose.swap || pose.backArm === 'front') innerOutline(g, cells, sp.outline);
+        return cells;
       };
 
       const backBehind = !pose.swap && pose.backArm !== 'front';
       if (backBehind) drawArm(pose.arms[0], false);
       drawLeg(pose.legs[0], false);
       drawLeg(pose.legs[1], true);
+      // bras avant sous le torse (par-dessus les jambes)
+      const armUnder = under ? drawArm(pose.arms[1], true) : null;
       const headRot = (pose.tilt || 0) + lean * 0.5;
       const hy0 = neck.y + (pose.hy || 0) - (sp.headLift || 0);
       if (P.hairBack && !lost.head) {
@@ -276,11 +305,12 @@
         stampRot(g, hb.t, hb.pivot[0] + 0.5, hb.pivot[1] + 0.5, neck.x + (pose.hx || 0), hy0, headRot * 0.6);
       }
       for (let y = 0; y < CH; y++) for (let x = 0; x < CW; x++) if (tg[y][x] !== '.') g[y][x] = tg[y][x];
+      if (armUnder) seamUnder(g, armUnder);
       const hp = P.head;
       if (!lost.head) stampRot(g, hp.t, hp.pivot[0] + 0.5, hp.pivot[1] + 0.5, neck.x + (pose.hx || 0), hy0, headRot);
       else stumps.push([neck.x, neck.y - 1, 6, 3]);
       if (!backBehind && !pose.swap) drawArm(pose.arms[0], false);
-      drawArm(pose.arms[1], true);
+      if (!under) drawArm(pose.arms[1], true);
       if (pose.swap) drawArm(pose.arms[0], false);
 
       const canvas = Pix.render(g, sp.art.pal, { outlineColor: sp.outlineColor || '#050307' });

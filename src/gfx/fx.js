@@ -321,6 +321,15 @@
             ctx.globalAlpha = 0.6;
             R.rect(-l, -1, l + 3, 3, color);
             ctx.restore();
+          } else if (o.sprite) {
+            // sprite relevé sur une planche (orbe d'énergie...) qui tourne sur lui-même
+            const cv = o.sprite;
+            ctx.save();
+            ctx.translate(Math.round(this.x), Math.round(this.y));
+            if (o.spin) ctx.rotate(o.spin * this.t);
+            ctx.globalCompositeOperation = o.add === false ? 'source-over' : 'lighter';
+            ctx.drawImage(cv, -Math.round(cv.width / 2), -Math.round(cv.height / 2));
+            ctx.restore();
           } else if (o.kind === 'rock') {
             R.rect(this.x - 2, this.y - 2, 5, 4, '#8a7058');
             R.rect(this.x - 1, this.y - 2, 2, 1, '#b09878');
@@ -331,6 +340,32 @@
             R.circle(this.x, this.y, s * 0.5, '#ffffff');
             ctx.restore();
           }
+        },
+      });
+    }
+
+    // Sprite d'effet relevé sur une planche (orbe galaxie, tourbillon, colonne...) :
+    // apparaît, peut grossir / tourner / se déplacer, puis s'efface.
+    // o : dur, scale, grow, spin, vx, vy, flip, add (mélange additif, par défaut oui),
+    //     anchor ('center' ou 'bottom' : posé au sol), behind, alpha.
+    sprite(cv, x, y, o = {}) {
+      return this.add({
+        dur: o.dur || 0.5,
+        behind: !!o.behind,
+        draw: (ctx, it) => {
+          if (!cv) return;
+          const p = Math.min(1, it.t / it.dur);
+          const s = (o.scale || 1) * (o.grow ? 1 + (p - 0.5) * o.grow : 1);
+          const w = cv.width * s;
+          const h = cv.height * s;
+          ctx.save();
+          ctx.globalCompositeOperation = o.add === false ? 'source-over' : 'lighter';
+          ctx.globalAlpha = (o.alpha || 1) * (p < 0.12 ? p / 0.12 : p > 0.6 ? 1 - (p - 0.6) / 0.4 : 1);
+          ctx.translate(Math.round(x + (o.vx || 0) * it.t), Math.round(y + (o.vy || 0) * it.t));
+          if (o.spin) ctx.rotate(o.spin * it.t);
+          if (o.flip) ctx.scale(-1, 1);
+          ctx.drawImage(cv, Math.round(-w / 2), Math.round(o.anchor === 'bottom' ? -h : -h / 2), Math.round(w), Math.round(h));
+          ctx.restore();
         },
       });
     }

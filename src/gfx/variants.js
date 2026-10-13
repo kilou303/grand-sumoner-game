@@ -275,6 +275,8 @@
       outline: 'H',
       animMap,
       headLift: spec.head === 'hood' ? 0 : 2,
+      // bras avant derrière le torse (seul Djegui le garde devant)
+      frontArm: spec.frontArm || 'under',
     });
   V.makeChar = makeChar;
 
