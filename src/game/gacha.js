@@ -10,7 +10,7 @@
       sub: 'Tous les héros sont disponibles',
       featured: null,
       color: '#3ea8ff',
-      show: ['ignara', 'thalassa', 'gaius'],
+      show: ['malik', 'iris', 'dante'],
     },
     {
       id: 'aube',
@@ -19,6 +19,22 @@
       featured: 'kaelen',
       color: '#ffd040',
       show: ['kaelen'],
+    },
+    {
+      id: 'voile',
+      name: 'Œil Voilé',
+      sub: 'Taux de KENJI augmenté !',
+      featured: 'kenji',
+      color: '#40b0ff',
+      show: ['kenji'],
+    },
+    {
+      id: 'pourpre',
+      name: 'Lame Pourpre',
+      sub: 'Taux de YUNA augmenté !',
+      featured: 'yuna',
+      color: '#ff4060',
+      show: ['yuna'],
     },
     {
       id: 'nuit',

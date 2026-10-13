@@ -18,7 +18,15 @@
   };
 
   // Copie miroir / agrandie (plus proche voisin) d'un canvas.
+  const FLIP = new WeakMap();
   const flip = (cv) => {
+    const c0 = FLIP.get(cv);
+    if (c0) return c0;
+    const out = flipRaw(cv);
+    FLIP.set(cv, out);
+    return out;
+  };
+  const flipRaw = (cv) => {
     const out = Pix.makeCanvas(cv.width, cv.height);
     const c = out.getContext('2d');
     c.translate(cv.width, 0);
@@ -108,23 +116,87 @@
     return { canvas: out, ox: x0, oy: y0, n: (x1 - x0 + 1) * (y1 - y0 + 1) };
   };
 
-  // Brise un canvas en n morceaux par découpes successives.
+  // Brise un canvas en n morceaux trapus : découpes successives du plus gros morceau
+  // (alternativement ~horizontales / ~verticales), calculées en un passage sur les pixels.
   const shatter = (cv, n, edge) => {
-    let pieces = [{ canvas: cv, ox: 0, oy: 0, n: cv.width * cv.height }];
-    for (let i = 0; i < n - 1; i++) {
-      pieces.sort((p, q) => q.n - p.n);
-      const p = pieces.shift();
-      // coupes alternées ~horizontales / ~verticales : morceaux trapus (pas d'éclats fins)
-      const wide = p.canvas.width >= p.canvas.height;
-      const ang = (wide ? Math.PI / 2 : 0) + U.rand(-0.45, 0.45);
-      const r = slice(p.canvas, p.canvas.width * U.rand(0.35, 0.65), p.canvas.height * U.rand(0.35, 0.65), ang, edge);
-      for (const half of [r.a, r.b]) {
-        const c2 = crop(half);
-        if (c2 && c2.n > 4) pieces.push({ canvas: c2.canvas, ox: p.ox + c2.ox, oy: p.oy + c2.oy, n: c2.n });
-      }
-      if (!pieces.length) break;
+    const w = cv.width;
+    const h = cv.height;
+    const src = cv.getContext('2d').getImageData(0, 0, w, h).data;
+    const reg = new Int16Array(w * h).fill(-1);
+    const regions = [[]];
+    for (let i = 0; i < w * h; i++) if (src[i * 4 + 3]) {
+      reg[i] = 0;
+      regions[0].push(i);
     }
-    return pieces;
+    const bbox = (px) => {
+      let x0 = w;
+      let y0 = h;
+      let x1 = 0;
+      let y1 = 0;
+      for (const i of px) {
+        const x = i % w;
+        const y = (i - x) / w;
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+        if (y < y0) y0 = y;
+        if (y > y1) y1 = y;
+      }
+      return [x0, y0, x1, y1];
+    };
+    for (let k = 0; k < n - 1; k++) {
+      let bi = 0;
+      for (let r = 1; r < regions.length; r++) if (regions[r].length > regions[bi].length) bi = r;
+      const px = regions[bi];
+      if (px.length < 8) break;
+      const [x0, y0, x1, y1] = bbox(px);
+      const ang = (x1 - x0 >= y1 - y0 ? Math.PI / 2 : 0) + U.rand(-0.45, 0.45);
+      const cx = U.lerp(x0, x1, U.rand(0.35, 0.65));
+      const cy = U.lerp(y0, y1, U.rand(0.35, 0.65));
+      const s = Math.sin(ang);
+      const c = Math.cos(ang);
+      const A = [];
+      const B = [];
+      for (const i of px) {
+        const x = i % w;
+        ((x - cx) * s - ((i - x) / w - cy) * c > 0 ? A : B).push(i);
+      }
+      if (!A.length || !B.length) continue;
+      for (const i of B) reg[i] = regions.length;
+      regions[bi] = A;
+      regions.push(B);
+    }
+    // une image par morceau, bord sanglant là où il touchait un autre morceau
+    const e = U.hexToRgb(edge || '#7a0610');
+    const out = [];
+    regions.forEach((px, id) => {
+      if (px.length < 3) return;
+      const [x0, y0, x1, y1] = bbox(px);
+      const pw = x1 - x0 + 1;
+      const ph = y1 - y0 + 1;
+      const pc = Pix.makeCanvas(pw, ph);
+      const ctx = pc.getContext('2d');
+      const img = ctx.createImageData(pw, ph);
+      for (const i of px) {
+        const x = i % w;
+        const y = (i - x) / w;
+        let cut = false;
+        for (let d = 0; d < 4 && !cut; d++) {
+          const nx = x + (d === 0 ? 1 : d === 1 ? -1 : 0);
+          const ny = y + (d === 2 ? 1 : d === 3 ? -1 : 0);
+          if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+          const r2 = reg[ny * w + nx];
+          cut = r2 >= 0 && r2 !== id;
+        }
+        const o = ((y - y0) * pw + (x - x0)) * 4;
+        img.data[o] = cut ? e[0] : src[i * 4];
+        img.data[o + 1] = cut ? e[1] : src[i * 4 + 1];
+        img.data[o + 2] = cut ? e[2] : src[i * 4 + 2];
+        img.data[o + 3] = 255;
+      }
+      ctx.putImageData(img, 0, 0);
+      out.push({ canvas: pc, ox: x0, oy: y0, n: px.length });
+    });
+    return out;
   };
 
   class GoreLayer {
@@ -184,30 +256,71 @@
       return f.rig ? this.dismemberRig(f, hitDir) : this.dismemberSprite(f, hitDir);
     }
 
-    // Humain modulaire : un bras s'arrache et vole, le moignon gicle.
+    // Articulation d'une image du rig (avec repli si le membre est caché, ex. main en poche).
+    static joint(fr, k) {
+      if (fr[k]) return fr[k];
+      const s = k[k.length - 1];
+      const b = k.slice(0, -1);
+      const off = (p, dy) => ({ x: p.x, y: p.y + dy });
+      if (b === 'elb') return off(GoreLayer.joint(fr, 'sh' + s), 7);
+      if (b === 'wr') return off(GoreLayer.joint(fr, 'sh' + s), 14);
+      if (b === 'knee') return off(GoreLayer.joint(fr, 'hip' + s), 6);
+      if (b === 'ank') return off(GoreLayer.joint(fr, 'knee' + s), 7);
+      if (b === 'hip') return fr.hip;
+      return fr.hip;
+    }
+
+    // Humain modulaire : coupe à une articulation (épaule, coude, poignet, hanche, genou) ;
+    // le morceau vole, le moignon gicle.
     dismemberRig(f, hitDir) {
       const rig = f.art.rig;
-      const opts = ['armF', 'armB'].filter((p) => !rig.lost[p]);
-      if (!opts.length) return false;
-      const part = opts[Math.floor(Math.random() * opts.length)];
+      const L = rig.lost;
+      const cand = [];
+      for (const s of ['F', 'B']) {
+        // un héros perd plutôt ses membres arrière (il garde son arme)
+        const w = f.isHero && s === 'F' ? 0.25 : 1;
+        if (!L['arm' + s]) {
+          cand.push(['arm' + s, 3 * w, 'sh' + s]);
+          if (!L['lo' + s]) {
+            cand.push(['lo' + s, 3 * w, 'elb' + s]);
+            if (!L['fist' + s]) cand.push(['fist' + s, 1.5 * w, 'wr' + s]);
+          }
+        }
+        if (!L['leg' + s]) {
+          if (!L['knee' + s]) cand.push(['knee' + s, 2 * w, 'knee' + s]);
+          cand.push(['leg' + s, 0.8 * w, 'hip' + s]);
+        }
+      }
+      if (!cand.length) return false;
+      let r = Math.random() * cand.reduce((a, c) => a + c[1], 0);
+      let pick = cand[0];
+      for (const c of cand) {
+        r -= c[1];
+        if (r <= 0) {
+          pick = c;
+          break;
+        }
+      }
+      const [part, , jk] = pick;
       const fr = f.art.frame(f.anim, f.at);
       const M = GoreLayer.rigMap(f);
-      const sh = part === 'armF' ? fr.shF : fr.shB;
+      const j = GoreLayer.joint(fr, jk);
       const cols = GoreLayer.bloodOf(f);
-      rig.lose(part);
       let cv = scaleCv(rig.partCanvas(part), M.rs);
+      rig.lose(part);
       if (M.dir < 0) cv = flip(cv);
-      const sx = M.x(sh.x);
-      const sy = M.y(sh.y);
-      this.gib(cv, sx - cv.width / 2, sy - 4, hitDir * U.rand(60, 130), -U.rand(150, 230), f.y, cols, { spin: hitDir * U.rand(8, 16) });
+      const sx = M.x(j.x);
+      const sy = M.y(j.y);
+      this.gib(cv, sx - cv.width / 2, sy - 3, hitDir * U.rand(60, 130), -U.rand(150, 230), f.y, cols, { spin: hitDir * U.rand(8, 16) });
       this.spray(sx, sy, f.y, cols, { n: 34, speed: 170, angle: -Math.PI / 2 + hitDir * 0.5, spread: 1.4 });
+      // le moignon reste à l'articulation coupée
       this.spurt(
         f,
         () => {
           const f2 = f.art.frame(f.anim, f.at);
-          const s2 = part === 'armF' ? f2.shF : f2.shB;
+          const j2 = GoreLayer.joint(f2, jk);
           const M2 = GoreLayer.rigMap(f);
-          return [M2.x(s2.x), M2.y(s2.y)];
+          return [M2.x(j2.x), M2.y(j2.y)];
         },
         cols,
         1.6
@@ -286,36 +399,48 @@
       this.spray(ox + cx, oy + cy, f.y, cols, { n: f.boss ? 160 : 80, speed: 230 * power, spread: 6.3 });
     }
 
-    // Humain : la tête, le torse, les bras et les jambes partent chacun de leur côté.
+    // Humain : le corps se sépare à chaque articulation (tête, poitrine, bassin, biceps,
+    // avant-bras, poings, cuisses, tibias, pieds) et chaque morceau part de son côté.
     explodeRig(f, power = 1) {
       const rig = f.art.rig;
+      const L = rig.lost;
       const fr = f.art.frame(f.anim, f.at);
       const M = GoreLayer.rigMap(f);
       const cols = GoreLayer.bloodOf(f);
-      const cy = M.y(fr.neck.y + 14);
-      const cx = M.x(fr.neck.x);
-      const parts = [
-        ['head', fr.neck.x, fr.neck.y - 8],
-        ['torso', fr.neck.x, fr.neck.y + 12],
-        ['armF', fr.shF.x, fr.shF.y + 7],
-        ['armB', fr.shB.x, fr.shB.y + 7],
-        ['legF', fr.hip.x + 4, fr.hip.y + 13],
-        ['legB', fr.hip.x - 4, fr.hip.y + 13],
-      ];
-      for (const [name, lx, ly] of parts) {
-        if (rig.lost[name]) continue;
-        let cv = scaleCv(rig.partCanvas(name), M.rs);
-        if (M.dir < 0) cv = flip(cv);
-        const pieces = name === 'torso' && Math.random() < 0.6 ? shatter(cv, 2, cols[2]) : [{ canvas: cv, ox: 0, oy: 0 }];
-        const wx = M.x(lx);
-        const wy = M.y(ly);
-        for (const p of pieces) {
-          const ang = Math.atan2(wy - cy, wx - cx + U.rand(-2, 2));
-          const v = U.rand(90, 190) * power;
-          this.gib(p.canvas, wx - cv.width / 2 + p.ox, wy - cv.height / 2 + p.oy, Math.cos(ang) * v + 30, Math.sin(ang) * v - U.rand(140, 260) * power, f.y, cols, { spin: U.rand(-14, 14) });
+      const J = (k) => GoreLayer.joint(fr, k);
+      const mid = (a, b, dy = 0) => [(a.x + b.x) / 2, (a.y + b.y) / 2 + dy];
+      const waist = fr.waist || mid(fr.neck, fr.hip);
+      const W = Array.isArray(waist) ? { x: waist[0], y: waist[1] } : waist;
+      const parts = [];
+      if (!L.head) parts.push(['head', fr.neck.x, fr.neck.y - 8]);
+      parts.push(['chest', ...mid(fr.neck, W)], ['pelvis', ...mid(W, fr.hip, 1)]);
+      for (const s of ['F', 'B']) {
+        if (!L['arm' + s]) {
+          parts.push(['up' + s, ...mid(J('sh' + s), J('elb' + s))]);
+          if (!L['lo' + s]) {
+            parts.push(['low' + s, ...mid(J('elb' + s), J('wr' + s))]);
+            if (!L['fist' + s]) parts.push(['hand' + s, J('wr' + s).x, J('wr' + s).y]);
+          }
+        }
+        if (!L['leg' + s]) {
+          parts.push(['thigh' + s, ...mid(J('hip' + s), J('knee' + s))]);
+          if (!L['knee' + s]) {
+            parts.push(['shin' + s, ...mid(J('knee' + s), J('ank' + s))]);
+            parts.push(['foot' + s, J('ank' + s).x + 2, J('ank' + s).y + 2]);
+          }
         }
       }
-      for (const k of ['head', 'armF', 'armB']) rig.lost[k] = true;
+      const cx = M.x(W.x);
+      const cy = M.y(W.y);
+      for (const [name, lx, ly] of parts) {
+        let cv = scaleCv(rig.partCanvas(name), M.rs);
+        if (M.dir < 0) cv = flip(cv);
+        const wx = M.x(lx);
+        const wy = M.y(ly);
+        const ang = Math.atan2(wy - cy, wx - cx + U.rand(-2, 2));
+        const v = U.rand(90, 200) * power;
+        this.gib(cv, wx - cv.width / 2, wy - cv.height / 2, Math.cos(ang) * v + U.rand(-30, 50), Math.sin(ang) * v - U.rand(140, 260) * power, f.y, cols, { spin: U.rand(-14, 14), bleed: 1.6 });
+      }
       this.meat(cx, cy, f.y, cols, f.boss ? 16 : 8, power);
       this.spray(cx, cy, f.y, cols, { n: f.boss ? 170 : 90, speed: 230 * power, spread: 6.3 });
     }
@@ -389,8 +514,11 @@
       this.spurts = this.spurts.filter((s) => s.t > 0);
     }
 
-    drawDecals(ctx) {
-      ctx.drawImage(this.decal, 0, 0);
+    // camX : ne copie que la partie visible des flaques.
+    drawDecals(ctx, camX = 0) {
+      const x = Math.max(0, Math.floor(camX) - 8);
+      const w = Math.min(this.decal.width - x, GS.W + 16);
+      if (w > 0) ctx.drawImage(this.decal, x, 0, w, GS.H, x, 0, w, GS.H);
     }
 
     draw(ctx) {

@@ -57,7 +57,7 @@
       this.fx = new GS.FXLayer();
       this.heroes = GS.Save.teamUnits().map((u, i) => {
         const f = B.heroFighter(u, i);
-        f.art = GS.Art.char(f.def);
+        f.art = GS.Art.fresh(f.def);
         f.rig = !!f.art.rig;
         if (!f.rig) f.sprite = scaledSprite(f.sprite, 2);
         f.anim = 'idle';
@@ -71,6 +71,9 @@
         f.vx = 0;
         return f;
       });
+      // poses pré-calculées petit à petit (pas de saccade au premier coup)
+      this.warm = [];
+      for (const h of this.heroes) if (h.rig) this.warmUp(h, ['idle', 'walk', 'run', 'stance', 'hurt', 'jab', 'cross', 'uppercut', 'kick', 'airKick', 'slashA', 'slashB', 'thrust', 'cast', 'jump', 'land', 'victory']);
       this.enemies = [];
       this.groups = [];
       this.pickups = [];
@@ -138,6 +141,7 @@
         const f = B.enemyFighter(k, el, this.stage.level, j, [g.x + (p[0] - 240) * 1.2 + 40, 196 + (p[1] - 136) * 0.9]);
         f.dir = -1;
         f.at = Math.random() * 3;
+        if (f.rig) this.warmUp(f, ['stance', 'run', 'hurt', 'jab', 'cross', 'slashA', 'slashB', 'thrust', 'cast', 'jump']);
         return f;
       });
       for (const e of this.enemies) {
@@ -459,6 +463,10 @@
             if (!h.alive) {
               h.alive = true;
               h.ko = 0;
+              // les morceaux se recollent
+              h.gibbed = false;
+              h.cuts = 0;
+              if (h.rig) h.art.rig.heal();
               h.hp = Math.round(h.maxHp * ab.revive);
               h.statuses = [];
               h.ct = h.turnLen() * 0.5;
@@ -563,8 +571,8 @@
       if (tgt.hp <= 0) {
         tgt.alive = false;
         if (f.isHero) f.sl = Math.min(100, f.sl + 10);
-        this.co.run(this.koAnim(tgt, f));
-      } else if (!tgt.isHero && (tgt.cuts || 0) < 2) {
+        this.co.run(this.koAnim(tgt));
+      } else if ((tgt.cuts || 0) < 2) {
         // coups violents : un membre peut être tranché
         const low = tgt.hp / tgt.maxHp < 0.5;
         const chance = r.crit ? 0.55 : big ? 0.3 : low ? 0.1 : 0;
@@ -585,9 +593,9 @@
     bleed(f, tgt, r, big) {
       const cols = GS.Gore.Layer.bloodOf(tgt);
       const d = this.hitDir(f, tgt);
-      const n = tgt.isHero ? (r.crit ? 10 : 5) : r.crit ? 30 : big ? 18 : 10;
+      const n = r.crit ? 30 : big ? 18 : 10;
       this.gore.spray(tgt.cx - d * 2, tgt.cy + U.rand(-6, 4) + (tgt.fly ? -16 : 0), tgt.y, cols, { n, speed: r.crit ? 180 : 125, angle: -Math.PI / 2 + d * 0.95, spread: 1.4, vx: d * 30 });
-      if (!tgt.isHero) A().sfx('splat');
+      A().sfx('splat');
     }
     // Membre tranché.
     sever(f, tgt) {
@@ -596,7 +604,8 @@
       A().sfx('sever');
       this.shake(3);
       this.hitstop = Math.max(this.hitstop, 0.09);
-      const label = part === 'head' ? 'DÉCAPITÉ !' : part === 'armF' || part === 'armB' ? 'BRAS TRANCHÉ !' : 'TRANCHÉ !';
+      const LBL = { head: 'DÉCAPITÉ !', arm: 'BRAS ARRACHÉ !', lo: 'AVANT-BRAS TRANCHÉ !', fist: 'MAIN TRANCHÉE !', leg: 'JAMBE ARRACHÉE !', knee: 'JAMBE TRANCHÉE !' };
+      const label = LBL[part] || LBL[part.slice(0, -1)] || 'TRANCHÉ !';
       this.fx.pop(tgt.cx, tgt.topY - 16 - (tgt.slot % 2) * 11, label, { color: '#ff2a3a', dur: 1.1 });
     }
     colOf(f) {
@@ -631,34 +640,26 @@
       this.dim = 0.6;
     }
 
-    *koAnim(f, by) {
+    // Mort : le combattant explose en morceaux (façon Happy Wheels), allié comme ennemi.
+    *koAnim(f) {
       f.flash = 1;
       f.flashColor = '#ff4060';
       f.charging = null;
-      if (!f.isHero) {
-        // l'ennemi explose en morceaux (façon Happy Wheels)
-        A().sfx('gore');
-        const power = f.boss ? 1.5 : 1;
-        this.gore.explode(f, power, f.rig ? null : this.fighterImage(f));
-        const cy = f.cy + (f.fly ? -16 : 0);
-        this.fx.ring(f.cx, cy, { color: '#c01020', r0: 4, r1: f.boss ? 50 : 30, dur: 0.3, width: 2 });
-        this.fx.burst(f.cx, cy, { n: 16, color: ['#8a0814', '#5a040c', '#c01020'], speed: 150, life: 0.45, add: false, gravity: 300 });
-        this.shake(f.boss ? 7 : 4);
-        this.hitstop = Math.max(this.hitstop, f.boss ? 0.2 : 0.07);
-        if (f.boss) {
-          this.screenFlash = 0.8;
-          this.flashColor = '#ff2030';
-        }
-        f.ko = 1;
-        yield 0.3;
-        return;
+      A().sfx('gore');
+      if (f.isHero) A().sfx('ko');
+      this.gore.explode(f, f.boss ? 1.5 : 1, f.rig ? null : this.fighterImage(f));
+      const cy = f.cy + (f.fly ? -16 : 0);
+      this.fx.ring(f.cx, cy, { color: '#c01020', r0: 4, r1: f.boss ? 50 : 30, dur: 0.3, width: 2 });
+      this.fx.burst(f.cx, cy, { n: 16, color: ['#8a0814', '#5a040c', '#c01020'], speed: 150, life: 0.45, add: false, gravity: 300 });
+      this.shake(f.boss ? 7 : 4);
+      this.hitstop = Math.max(this.hitstop, f.boss ? 0.2 : 0.07);
+      if (f.boss) {
+        this.screenFlash = 0.8;
+        this.flashColor = '#ff2030';
       }
-      A().sfx('ko');
-      if (f.rig) {
-        f.anim = 'ko';
-        f.at = 0;
-      }
-      yield* GS.tween(f, { ko: 1 }, 0.4, E.outQuad);
+      f.ko = 1;
+      f.gibbed = true;
+      yield 0.3;
     }
 
     // ---------------------------------------------------------------- animations
@@ -1243,8 +1244,21 @@
     }
 
     // ================================================================= mise à jour
+    warmUp(f, names) {
+      const rig = f.art.rig;
+      this.warm.push(...rig.warmList(names));
+      // morceaux du corps pour le gore (en cache, partagés entre persos identiques)
+      for (const s of ['F', 'B']) for (const n of ['up', 'low', 'hand', 'thigh', 'shin', 'foot', 'arm', 'lo', 'fist', 'knee', 'leg']) this.warm.push(() => rig.partCanvas(n + s));
+      for (const n of ['head', 'chest', 'pelvis']) this.warm.push(() => rig.partCanvas(n));
+    }
+
     update(dt) {
       this.t += dt;
+      // pré-calcul des poses : au plus ~2 ms par image
+      if (this.warm.length) {
+        const t0 = performance.now();
+        while (this.warm.length && performance.now() - t0 < 2) this.warm.shift()();
+      }
       this.handleTopButtons();
       if (this.paused) {
         this.handlePause();
@@ -1525,7 +1539,7 @@
       GS.BG.draw(this.area.bg, this.t, this.cam.x + shx, shy);
       ctx.save();
       ctx.translate(Math.round(-this.cam.x + shx), Math.round(shy));
-      this.gore.drawDecals(ctx);
+      this.gore.drawDecals(ctx, this.cam.x);
       if (this.dim > 0) {
         ctx.save();
         ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -1535,7 +1549,7 @@
       this.drawPickups();
       this.fx.draw(ctx, true);
       for (const f of this.fighters) {
-        if (f.ko >= 1 && !f.isHero) continue;
+        if (f.gibbed || (f.ko >= 1 && !f.isHero)) continue;
         ctx.globalAlpha = (1 - (f.isHero ? 0 : f.ko)) * 0.4;
         R.ellipse(f.x + f.offX + (f.kx || 0), f.y + 1, Math.max(8, f.rig ? 15 * (f.rscale || 1) : f.sprite.w * 0.3), 3, '#000000');
         ctx.globalAlpha = 1;
@@ -1596,7 +1610,7 @@
     }
 
     drawFighter(ctx, f) {
-      if (!f.isHero && f.ko >= 1) return;
+      if (f.gibbed || (!f.isHero && f.ko >= 1)) return;
       if (f.x < this.cam.x - 80 || f.x > this.cam.x + W() + 80) return;
       const sp = f.sprite;
       const flyY = f.fly ? -16 + Math.sin(this.t * 4 + f.slot) * 3 : 0;

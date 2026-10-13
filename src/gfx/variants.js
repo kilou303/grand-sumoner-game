@@ -97,17 +97,21 @@
   const chars = { next: 0x4e00 };
   const newKey = () => String.fromCharCode(chars.next++);
 
+  // spec : head, hair/hood, skin, eyes, jacket (couleur du haut), pants, shoes, weapon...
+  // + créateur de tenues (outfits.js) : top, bottom, shoeType (types), print,
+  //   printColor, inner, accent, belt, gloves, sole, laces, socks, acc (liste d’accessoires).
   V.build = (spec) => {
     const base = GS.DJEGUI_ART;
     const pal = Object.assign({}, base.pal);
-    const cache = {};
+    const keys = {};
     const keyOf = (color) => {
-      if (cache[color]) return cache[color];
+      if (keys[color]) return keys[color];
       const k = newKey();
       pal[k] = color;
-      cache[color] = k;
+      keys[color] = k;
       return k;
     };
+    const toKeys = (g) => g.map((row) => row.map((c) => (c ? keyOf(c) : '.')).join(''));
     // plage de luminosité de chaque matière (pour répartir le dégradé)
     const range = (names) => {
       let lo = 255;
@@ -123,50 +127,95 @@
     };
     const JACKET = ['torso', 'pocketF', 'pocketB', 'armUpF', 'armLoF'];
     const PANTS = ['thighF', 'shinF', 'thighB', 'shinB'];
+    // pièces de la fiche recolorées par luminosité (la texture est conservée) -> grilles de couleurs
     const recolor = (names, ramp, opts = {}) => {
       const [lo, hi] = range(names);
       const map = {};
       const out = {};
       for (const n of names) {
         const p = base.parts[n];
-        out[n] = Object.assign({}, p, {
-          t: p.t.map((row) =>
-            [...row]
-              .map((ch) => {
-                if (ch === '.') return ch;
-                if (map[ch]) return map[ch];
-                const c = base.pal[ch];
-                const L = lum(c);
-                let k = ch;
-                if (opts.skin && warm(c) && !red(c)) k = keyOf(sample(opts.skin, (L - 20) / 80));
-                else if (red(c)) k = opts.eye ? keyOf(L > 60 ? opts.eye : U.shade(opts.eye, -0.5)) : ch;
-                else if (L > 24 || opts.all) k = keyOf(sample(ramp, (L - lo) / Math.max(1, hi - lo)));
-                map[ch] = k;
-                return k;
-              })
-              .join('')
+        out[n] = {
+          pivot: p.pivot,
+          end: p.end,
+          g: p.t.map((row) =>
+            [...row].map((ch) => {
+              if (ch === '.') return null;
+              if (map[ch] !== undefined) return map[ch];
+              const c = base.pal[ch];
+              const L = lum(c);
+              let col = c;
+              if (opts.skin && warm(c) && !red(c)) col = sample(opts.skin, (L - 20) / 80);
+              else if (red(c)) col = opts.eye ? (L > 60 ? opts.eye : U.shade(opts.eye, -0.5)) : c;
+              else if (L > 24 || opts.all) col = sample(ramp, (L - lo) / Math.max(1, hi - lo));
+              map[ch] = col;
+              return col;
+            })
           ),
-        });
+        };
       }
       return out;
     };
     const parts = {};
     const skinRamp = V.ramp(spec.skin || '#e8b890');
-    Object.assign(parts, recolor(JACKET, V.ramp(spec.jacket)));
+    const topRamp = V.ramp(spec.jacket || '#e0dce8');
+    const pantsRamp = V.ramp(spec.pants || '#2c2832');
+    const shoeRamp = V.ramp(spec.shoes || '#e0e0ea');
+    Object.assign(parts, recolor(JACKET, topRamp));
     parts.armUpB = parts.armUpF;
     parts.armLoB = parts.armLoF;
-    Object.assign(parts, recolor(PANTS, V.ramp(spec.pants || '#2c2832')));
-    Object.assign(parts, recolor(['shoe'], V.ramp(spec.shoes || '#e0e0ea')));
-    Object.assign(parts, recolor(['fist'], skinRamp, { skin: skinRamp }));
+    Object.assign(parts, recolor(PANTS, pantsRamp));
+    Object.assign(parts, recolor(['shoe'], shoeRamp));
+    Object.assign(parts, spec.gloves ? recolor(['fist'], V.ramp(spec.gloves), { all: true }) : recolor(['fist'], skinRamp, { skin: skinRamp }));
+    // tenue : hauts / bas / chaussures peints (outfits.js)
+    const fit = GS.Outfits.build(spec, {
+      top: topRamp,
+      skin: skinRamp,
+      pants: pantsRamp,
+      bottom: pantsRamp,
+      shoe: shoeRamp,
+      accent: spec.accent,
+      inner: spec.inner ? V.ramp(spec.inner) : null,
+      belt: spec.belt ? V.ramp(typeof spec.belt === 'string' ? spec.belt : '#2a2024') : null,
+    });
+    Object.assign(parts, fit.parts);
+    // jupe sous la doudoune d'origine
+    if (fit.skirtUnder) parts.torso = { pivot: parts.torso.pivot, end: parts.torso.end, g: GS.Outfits.addSkirt(parts.torso.g, pantsRamp, skinRamp) };
+    // bottes / montantes sur le cargo d'origine : bas des tibias couleur chaussure
+    if (fit.cover && !fit.parts.shinF) {
+      for (const n of ['shinF', 'shinB']) {
+        const g = parts[n].g;
+        for (let y = g.length - fit.cover; y < g.length; y++) g[y] = g[y].map((c) => (c ? sample(shoeRamp, lum(c) / 140 + 0.15) : null));
+      }
+    }
     // tête
+    const accs = [].concat(spec.acc || []);
+    const ACC = GS.Outfits.HEAD_ACC;
+    const accMap = {
+      g: spec.frame || '#1a1820',
+      G: '#0c0a12',
+      B: spec.band || (accs.includes('headband') ? '#c02030' : '#16141c'),
+      q: U.shade(skinRamp[2], -0.25),
+      C: topRamp[1],
+    };
+    const stampAcc = (g, name, ox, oy) => {
+      const a = ACC[name];
+      if (!a) return;
+      a.t.forEach((row, y) => [...row].forEach((ch, x) => {
+        if (ch === '.' || !accMap[ch]) return;
+        const gx = ox + x;
+        const gy = oy + y;
+        if (gy >= 0 && gy < g.length && gx >= 0 && gx < g[0].length) g[gy][gx] = accMap[ch];
+      }));
+    };
     if (spec.head === 'hood') {
       Object.assign(parts, recolor(['head'], V.ramp(spec.hood || spec.jacket), { skin: skinRamp, eye: spec.eyes || '#ff3040' }));
+      for (const a of accs) stampAcc(parts.head.g, a, -3, 2);
     } else {
       const H = GS.HEADS;
       const g = GS.Pix.grid(24, 21);
       GS.Pix.stamp(g, H.face, 1, 2);
       GS.Pix.stamp(g, H[spec.head] || H.short, 1, 0);
-      if (spec.acc === 'elf') GS.Pix.stamp(g, H.elf, 1, 2);
+      if (accs.includes('elf')) GS.Pix.stamp(g, H.elf, 1, 2);
       const hair = V.ramp(spec.hair || '#5a3a22');
       const metal = V.ramp(spec.metal || '#b8c4d8');
       const cmap = {
@@ -182,19 +231,28 @@
         if (ch >= '2' && ch <= '4' && rng() < 0.22) return String.fromCharCode(ch.charCodeAt(0) + (rng() < 0.5 ? -1 : 1));
         return ch;
       };
-      const toRows = (grid) => {
+      const toColors = (grid) => {
         const t = [];
-        for (let y = 0; y < grid.h; y++) t.push(grid[y].map((ch) => (ch === '.' ? '.' : keyOf(cmap[tex(ch)] || '#ff00ff'))).join(''));
+        for (let y = 0; y < grid.h; y++) t.push(grid[y].map((ch) => (ch === '.' ? null : cmap[tex(ch)] || '#ff00ff')));
         return t;
       };
-      parts.head = { pivot: [11, 19], end: [11, 19], t: toRows(g) };
+      const hg = toColors(g);
+      for (const a of accs) stampAcc(hg, a, 1, 2);
+      parts.head = { pivot: [11, 19], end: [11, 19], g: hg };
       const back = H[spec.head + 'Back'];
       if (back) {
         // décalée vers l'arrière pour dépasser derrière l'épaule
         const gb = GS.Pix.grid(26, back.length);
         GS.Pix.stamp(gb, back, 1, 0);
-        parts.hairBack = { pivot: [16, 19], end: [16, 19], t: toRows(gb) };
+        parts.hairBack = { pivot: [16, 19], end: [16, 19], g: toColors(gb) };
       }
+    }
+    // conversion en palette
+    const done = new Map();
+    const out = {};
+    for (const [n, p] of Object.entries(parts)) {
+      if (!done.has(p)) done.set(p, { pivot: p.pivot, end: p.end, t: toKeys(p.g) });
+      out[n] = done.get(p);
     }
     // arme
     let weapon = null;
@@ -204,49 +262,41 @@
       if (spec.blade) Object.assign(wc, { L: U.shade(spec.blade, 0.5), M: spec.blade, D: U.shade(spec.blade, -0.4) });
       weapon = { grip: w.grip, t: w.t.map((row) => [...row].map((ch) => (ch === '.' ? '.' : keyOf(wc[ch] || '#ff00ff'))).join('')), kind: spec.weapon };
     }
-    return { pal, parts, weapon };
+    return { pal, parts: out, weapon, joints: fit.joints };
   };
 
-  let ARMED_MAP = null;
-  // Personnage modulaire à partir d'une description libre (ennemis humains).
-  const specArt = {};
-  // Nouvelle instance à chaque appel (chaque ennemi perd ses propres membres), art partagé.
-  V.charSpec = (key, spec) => {
-    const art = specArt[key] || (specArt[key] = V.build(spec));
-    const ch = new GS.ModRig.Char({
+  // Articulations par défaut (doudoune de la fiche).
+  const JOINTS = { hip: [14, 41], neck: [14, 15], shoulderF: [24, 19], shoulderB: [5, 20] };
+  // Personnage modulaire complet à partir d'une description.
+  const makeChar = (art, spec, animMap) =>
+    new GS.ModRig.Char({
       art,
       weapon: art.weapon,
-      joints: { hip: [14, 41], neck: [14, 15], shoulderF: [24, 19], shoulderB: [5, 20] },
-      hipF: 4,
-      hipB: -6,
-      outline: 'H',
-      animMap: spec.weapon ? ARMED_MAP : {},
-      headLift: spec.head === 'hood' ? 0 : 2,
-    });
-    return ch;
-  };
-
-  // ------------------------------------------------------------ personnages
-  const chars2 = {};
-  // Styles de combat : correspondance des animations génériques vers celles avec arme.
-  const ARMED = (ARMED_MAP = { idle: 'aidle', stance: 'astance', walk: 'awalk', run: 'arun', victory: 'avictory', cast: 'castStaff', hurt: 'ahurt', ko: 'ako', jump: 'ajump', land: 'aland' });
-  const BOW = Object.assign({}, ARMED, { cast: 'castStaff' });
-  V.char = (id) => {
-    if (chars2[id]) return chars2[id];
-    const def = GS.UNIT[id];
-    const spec = def.rigSpec;
-    const art = V.build(spec);
-    const animMap = spec.weapon ? (spec.weapon === 'bow' ? BOW : ARMED) : {};
-    chars2[id] = new GS.ModRig.Char({
-      art,
-      weapon: art.weapon,
-      joints: { hip: [14, 41], neck: [14, 15], shoulderF: [24, 19], shoulderB: [5, 20] },
+      joints: art.joints || JOINTS,
       hipF: 4,
       hipB: -6,
       outline: 'H',
       animMap,
       headLift: spec.head === 'hood' ? 0 : 2,
     });
+  V.makeChar = makeChar;
+
+  let ARMED_MAP = null;
+  // Personnage modulaire à partir d'une description libre (ennemis humains).
+  const specArt = {};
+  // Nouvelle instance à chaque appel (chaque ennemi perd ses propres membres), art partagé.
+  V.charSpec = (key, spec) => makeChar(specArt[key] || (specArt[key] = V.build(spec)), spec, spec.weapon ? ARMED_MAP : {});
+
+  // ------------------------------------------------------------ personnages
+  const chars2 = {};
+  // Styles de combat : correspondance des animations génériques vers celles avec arme.
+  const ARMED = (ARMED_MAP = { idle: 'aidle', stance: 'astance', walk: 'awalk', run: 'arun', victory: 'avictory', cast: 'castStaff', hurt: 'ahurt', ko: 'ako', jump: 'ajump', land: 'aland' });
+  const BOW = Object.assign({}, ARMED, { cast: 'castStaff' });
+  V.animMapFor = (spec) => (spec.weapon ? (spec.weapon === 'bow' ? BOW : ARMED) : {});
+  V.char = (id) => {
+    if (chars2[id]) return chars2[id];
+    const spec = GS.UNIT[id].rigSpec;
+    chars2[id] = makeChar(V.build(spec), spec, V.animMapFor(spec));
     return chars2[id];
   };
 })();

@@ -47,19 +47,26 @@
   };
   M.stampRot = stampRot;
 
-  // Torse : cisaillement (penché) + étirement vertical + balancement de l'ourlet.
+  // Torse en 2 pièces articulées à la taille : le bassin suit les hanches (penché de `hipLean`),
+  // la poitrine se penche de `lean` à partir de la taille (cisaillement, plus propre en pixel
+  // art qu'une rotation), avec écrasement/étirement et balancement de l'ourlet.
   // Le pivot (hanche) du gabarit est placé en (hx, hy).
-  const stampTorso = (g, tpl, pvx, pvy, hx, hy, lean, sy, sway, hemRows) => {
+  const WAIST = 11; // lignes entre la hanche et la taille
+  M.WAIST = WAIST;
+  const stampTorso = (g, tpl, pvx, pvy, hx, hy, lean, sy, sway, hemRows, hipLean) => {
     const th = tpl.length;
     const tw = tpl[0].length;
     const k = Math.tan(lean);
+    const kh = Math.tan(hipLean === undefined ? lean * 0.4 : hipLean);
+    const shiftOf = (up) => (up <= WAIST ? kh * up : kh * WAIST + k * (up - WAIST)) * sy;
     const top = Math.floor(hy - pvy * sy) - 2;
-    for (let y = top; y <= hy + 3; y++) {
+    const bottom = Math.ceil(hy + (th - pvy) * sy) + 1;
+    for (let y = top; y <= bottom; y++) {
       if (y < 0 || y >= g.h) continue;
       const ty = Math.floor(pvy + (y + 0.5 - hy) / sy);
       if (ty < 0 || ty >= th) continue;
       const up = pvy - ty; // hauteur au-dessus de la hanche (en lignes du gabarit)
-      let shift = k * up * sy;
+      let shift = shiftOf(up);
       const hemStart = th - hemRows;
       if (ty >= hemStart) shift += sway * ((ty - hemStart + 1) / hemRows);
       const row = tpl[ty];
@@ -73,7 +80,7 @@
     // position (en grille) d'un point du gabarit après transformation
     return (px, py) => {
       const up = pvy - py;
-      return { x: hx + (px - pvx) + k * up * sy, y: hy - up * sy };
+      return { x: hx + (px - pvx) + shiftOf(up), y: hy - up * sy };
     };
   };
 
@@ -141,12 +148,19 @@
       const P = this.P;
       const L = this.L;
       const J = sp.joints;
+      const lost = this.lost;
       const g = Pix.grid(CW, CH);
       const lean = pose.lean || 0;
       const sy = 1 + (pose.squash || 0);
+      const stumps = [];
+      const pts = {};
       // hauteur de hanche : le pied le plus bas touche le sol (sauf en l'air : pose.y < 0)
-      const ext = (l) => Math.cos(l.a) * L.thigh + Math.cos(l.a - l.k) * L.shin;
-      const lowest = Math.max(ext(pose.legs[0]), ext(pose.legs[1]));
+      const ext = (l, side) => {
+        if (lost['leg' + side]) return -1;
+        return Math.cos(l.a) * L.thigh + (lost['knee' + side] ? 0 : Math.cos(l.a - l.k) * L.shin);
+      };
+      let lowest = Math.max(ext(pose.legs[0], 'B'), ext(pose.legs[1], 'F'));
+      if (lowest < 0) lowest = 2; // plus de jambes : sur le bassin
       const hip = { x: ROOT_X + (pose.x || 0), y: GROUND - 6 - lowest + (pose.y || 0) };
 
       const limb = (part, x, y, a, map) => {
@@ -155,29 +169,42 @@
         return { cells, ex: x + Math.sin(a) * len(p), ey: y + Math.cos(a) * len(p) };
       };
 
+      // Jambe en 3 pièces : cuisse, tibia, pied.
       const drawLeg = (l, front) => {
+        const side = front ? 'F' : 'B';
         const hx = hip.x + (front ? sp.hipF : sp.hipB);
+        pts['hip' + side] = { x: hx, y: hip.y };
+        if (lost['leg' + side]) {
+          stumps.push([hx, hip.y + 1, 5, 3]);
+          return;
+        }
         const map = front ? null : this.shade;
         const t = limb(front ? 'thighF' : 'thighB', hx, hip.y, l.a, map);
-        const sa = l.a - l.k;
-        const s = limb(front ? 'shinF' : 'shinB', t.ex, t.ey, sa, map);
-        const shoe = P.shoe;
-        const fr = U.clamp(-sa * 0.65 + (l.toe || 0), -0.7, 1.4);
-        const cells = stampRot(g, shoe.t, shoe.pivot[0] + 0.5, shoe.pivot[1] + 0.5, s.ex, s.ey - 1, fr, map);
-        if (front) innerOutline(g, t.cells.concat(s.cells, cells), sp.outline);
+        pts['knee' + side] = { x: t.ex, y: t.ey };
+        let cells = t.cells;
+        if (lost['knee' + side]) stumps.push([t.ex, t.ey, 4, 4]);
+        else {
+          const sa = l.a - l.k;
+          const s = limb(front ? 'shinF' : 'shinB', t.ex, t.ey, sa, map);
+          const shoe = P.shoe;
+          const fr = U.clamp(-sa * 0.65 + (l.toe || 0), -0.7, 1.4);
+          cells = cells.concat(s.cells, stampRot(g, shoe.t, shoe.pivot[0] + 0.5, shoe.pivot[1] + 0.5, s.ex, s.ey - 1, fr, map));
+          pts['ank' + side] = { x: s.ex, y: s.ey - 1 };
+        }
+        if (front) innerOutline(g, cells, sp.outline);
       };
 
       // Torse d'abord dans une grille à part pour connaître les épaules.
       // Les bras "mains dans les poches" de la fiche sont collés au torse (même cisaillement).
       const tp = P.torso;
       const tg = Pix.grid(CW, CH);
-      const pocketB = (pose.arms[0].hand || 'fist') === 'pocket';
-      const pocketF = (pose.arms[1].hand || 'fist') === 'pocket';
-      const torsoStamp = (part) => stampTorso(tg, P[part].t, P[part].pivot[0] + 0.5, P[part].pivot[1] + 0.5, hip.x, hip.y, lean, sy, pose.sway || 0, 5);
-      const lost = this.lost;
-      if (pocketB && P.pocketB && !lost.armB) torsoStamp('pocketB');
+      const intact = (side) => !lost['arm' + side] && !lost['lo' + side] && !lost['fist' + side];
+      const pocketB = (pose.arms[0].hand || 'fist') === 'pocket' && P.pocketB && intact('B');
+      const pocketF = (pose.arms[1].hand || 'fist') === 'pocket' && P.pocketF && intact('F');
+      const torsoStamp = (part) => stampTorso(tg, P[part].t, P[part].pivot[0] + 0.5, P[part].pivot[1] + 0.5, hip.x, hip.y, lean, sy, pose.sway || 0, 5, pose.hipLean);
+      if (pocketB) torsoStamp('pocketB');
       const map = torsoStamp('torso');
-      if (pocketF && P.pocketF && !lost.armF) torsoStamp('pocketF');
+      if (pocketF) torsoStamp('pocketF');
       const local = (j) => [j[0] - (J.hip[0] - tp.pivot[0]), j[1] - (J.hip[1] - tp.pivot[1])];
       const shF = map(...local(J.shoulderF));
       const shB = map(...local(J.shoulderB));
@@ -187,35 +214,55 @@
       shB.y += tw * 1;
       shF.x -= tw * 3;
       const neck = map(...local(J.neck));
+      pts.waist = map(tp.pivot[0], tp.pivot[1] - WAIST);
 
+      // Bras en 3 pièces : biceps, avant-bras, poing (+ arme dans le poing avant).
       let handF = null;
       const drawArm = (arm, front) => {
-        if (lost[front ? 'armF' : 'armB']) return;
-        if ((arm.hand || 'fist') === 'pocket' && P.pocketF) return;
+        const side = front ? 'F' : 'B';
         const sh = front ? shF : shB;
-        // les deux bras sont identiques (même texture, pas d'assombrissement)
+        pts['sh' + side] = sh;
+        if (lost['arm' + side]) {
+          stumps.push([sh.x, sh.y, 4, 4]);
+          return;
+        }
+        let hand = arm.hand || 'fist';
+        if (hand === 'pocket') {
+          if (front ? pocketF : pocketB) return;
+          // bras mutilé : il pend le long du corps
+          arm = { a: front ? -0.12 : 0.12, e: front ? 0.2 : -0.2, hand: 'fist' };
+          hand = 'fist';
+        }
         const mp = null;
         const upN = front ? 'armUpF' : 'armUpB';
         const loN = front ? 'armLoF' : 'armLoB';
         const u = limb(upN, sh.x, sh.y, arm.a, mp);
+        pts['elb' + side] = { x: u.ex, y: u.ey };
+        let cells = u.cells;
         const fa = arm.a + (arm.e || 0);
-        const lo = limb(loN, u.ex, u.ey, fa, mp);
-        let cells = u.cells.concat(lo.cells);
-        const hand = arm.hand || 'fist';
-        const hl = len(P[loN]) + 0.5;
-        const hx = u.ex + Math.sin(fa) * hl;
-        const hy = u.ey + Math.cos(fa) * hl;
-        const W = sp.weapon;
-        if (front && W && pose.wpn !== 'none' && hand !== 'pocket') {
-          const wa = pose.wabs !== undefined ? pose.wabs : fa + (pose.wr !== undefined ? pose.wr : 1.6);
-          cells = cells.concat(stampRot(g, W.t, W.grip[0] + 0.5, W.grip[1] + 0.5, hx, hy, Math.PI - wa));
-        }
-        if (hand !== 'pocket') {
-          const f = P.fist;
-          cells = cells.concat(stampRot(g, f.t, f.pivot[0] + 0.5, f.pivot[1] + 0.5, hx, hy, -fa, mp));
+        if (lost['lo' + side]) stumps.push([u.ex, u.ey, 3, 3]);
+        else {
+          const lo = limb(loN, u.ex, u.ey, fa, mp);
+          cells = cells.concat(lo.cells);
+          const hl = len(P[loN]) + 0.5;
+          const hx = u.ex + Math.sin(fa) * hl;
+          const hy = u.ey + Math.cos(fa) * hl;
+          pts['wr' + side] = { x: hx, y: hy };
+          if (lost['fist' + side]) stumps.push([lo.ex, lo.ey, 3, 3]);
+          else {
+            const W = sp.weapon;
+            if (front && W && pose.wpn !== 'none' && hand !== 'pocket') {
+              const wa = pose.wabs !== undefined ? pose.wabs : fa + (pose.wr !== undefined ? pose.wr : 1.6);
+              cells = cells.concat(stampRot(g, W.t, W.grip[0] + 0.5, W.grip[1] + 0.5, hx, hy, Math.PI - wa));
+            }
+            if (hand !== 'pocket') {
+              const f = P.fist;
+              cells = cells.concat(stampRot(g, f.t, f.pivot[0] + 0.5, f.pivot[1] + 0.5, hx, hy, -fa, mp));
+            }
+            if (front) handF = { x: hx, y: hy, ang: fa };
+          }
         }
         if (front || pose.swap || pose.backArm === 'front') innerOutline(g, cells, sp.outline);
-        if (front) handF = { x: hx, y: hy, ang: fa };
       };
 
       const backBehind = !pose.swap && pose.backArm !== 'front';
@@ -230,32 +277,49 @@
       }
       for (let y = 0; y < CH; y++) for (let x = 0; x < CW; x++) if (tg[y][x] !== '.') g[y][x] = tg[y][x];
       const hp = P.head;
-      if (!lost.head) stampRot(g, hp.t, hp.pivot[0] + 0.5, hp.pivot[1] + 0.5, neck.x + (pose.hx || 0), neck.y + (pose.hy || 0) - (sp.headLift || 0), (pose.tilt || 0) + lean * 0.5);
+      if (!lost.head) stampRot(g, hp.t, hp.pivot[0] + 0.5, hp.pivot[1] + 0.5, neck.x + (pose.hx || 0), hy0, headRot);
+      else stumps.push([neck.x, neck.y - 1, 6, 3]);
       if (!backBehind && !pose.swap) drawArm(pose.arms[0], false);
       drawArm(pose.arms[1], true);
       if (pose.swap) drawArm(pose.arms[0], false);
 
       const canvas = Pix.render(g, sp.art.pal, { outlineColor: sp.outlineColor || '#050307' });
       // moignons sanglants
-      const stump = (x, y, w, h) => {
+      if (stumps.length) {
         const c = canvas.getContext('2d');
-        c.fillStyle = '#5a040c';
-        c.fillRect(Math.round(x - w / 2), Math.round(y - h / 2), w, h);
-        c.fillStyle = '#c01020';
-        c.fillRect(Math.round(x - w / 2) + 1, Math.round(y - h / 2) + 1, Math.max(1, w - 2), Math.max(1, h - 2));
-      };
-      if (lost.armB) stump(shB.x + 1, shB.y + 1, 4, 4);
-      if (lost.armF) stump(shF.x + 1, shF.y + 1, 4, 4);
-      if (lost.head) stump(neck.x + 1, neck.y, 6, 3);
-      return {
+        for (const [x, y, w, h] of stumps) {
+          const x0 = Math.round(x + 1 - w / 2);
+          const y0 = Math.round(y + 1 - h / 2);
+          c.fillStyle = '#5a040c';
+          c.fillRect(x0, y0, w, h);
+          c.fillStyle = '#c01020';
+          c.fillRect(x0 + 1, y0 + 1, Math.max(1, w - 2), Math.max(1, h - 2));
+        }
+      }
+      const P1 = (p) => (p ? { x: p.x + 1, y: p.y + 1 } : null);
+      const out = {
         canvas,
         hand: handF ? { x: handF.x + 1, y: handF.y + 1, ang: handF.ang } : null,
         head: { x: neck.x + 1, y: neck.y - 9 + 1 },
-        shF: { x: shF.x + 1, y: shF.y + 1 },
-        shB: { x: shB.x + 1, y: shB.y + 1 },
-        neck: { x: neck.x + 1, y: neck.y + 1 },
-        hip: { x: hip.x + 1, y: hip.y + 1 },
+        shF: P1(shF),
+        shB: P1(shB),
+        neck: P1(neck),
+        hip: P1(hip),
       };
+      for (const k of Object.keys(pts)) if (!out[k]) out[k] = P1(pts[k]);
+      return out;
+    }
+
+    // Copie indépendante (mêmes graphismes, membres et cache propres) : un par combattant.
+    clone() {
+      return new ModChar(this.spec);
+    }
+
+    // Recolle tous les membres (réanimation).
+    heal() {
+      this.lost = {};
+      this.lostKey = '';
+      this.cache.clear();
     }
 
     // Arrache un membre : les images suivantes sont rendues sans lui.
@@ -267,42 +331,80 @@
       return true;
     }
 
-    // Image isolée d'une partie du corps (morceaux qui volent) : 'head', 'armF', 'armB',
-    // 'legF', 'legB', 'torso'. Renvoie un canvas recadré.
+    // Image isolée d'une partie du corps (morceaux qui volent). Segments : 'head', 'chest',
+    // 'pelvis', 'upF' (biceps), 'lowF' (avant-bras), 'handF' (poing + arme), 'thighF',
+    // 'shinF', 'footF' (et B). Membres entiers coupés à une articulation : 'armF' (épaule),
+    // 'loF' (coude), 'fistF' (poignet), 'legF' (hanche), 'kneeF' (genou). Canvas recadré.
     partCanvas(name) {
+      const cache = this.spec._parts || (this.spec._parts = {});
+      return cache[name] || (cache[name] = this.renderPart(name));
+    }
+
+    renderPart(name) {
       const P = this.P;
       const sp = this.spec;
       const S = 64;
       const g = Pix.grid(S, S);
       const cx = S / 2;
+      const side = name[name.length - 1];
+      const base = name.slice(0, -1);
+      const st = (p, x, y, a) => stampRot(g, p.t, p.pivot[0] + 0.5, p.pivot[1] + 0.5, x, y, ang0(p) - a);
+      const up = P[side === 'B' ? 'armUpB' : 'armUpF'];
+      const lo = P[side === 'B' ? 'armLoB' : 'armLoF'];
+      const th = P[side === 'B' ? 'thighB' : 'thighF'];
+      const sh = P[side === 'B' ? 'shinB' : 'shinF'];
+      const arm = (from, a = 0.3) => {
+        // biceps (si 'up'), avant-bras (si <= 'lo'), poing + arme
+        let x = cx;
+        let y = 14;
+        const fa = a + 0.4;
+        if (from === 'up') {
+          st(up, x, y, a);
+          x += Math.sin(a) * len(up);
+          y += Math.cos(a) * len(up);
+        }
+        if (from === 'up' || from === 'lo') {
+          st(lo, x, y, fa);
+          x += Math.sin(fa) * (len(lo) + 0.5);
+          y += Math.cos(fa) * (len(lo) + 0.5);
+        }
+        if (side === 'F' && sp.weapon) stampRot(g, sp.weapon.t, sp.weapon.grip[0] + 0.5, sp.weapon.grip[1] + 0.5, x, y, Math.PI - (fa + 1.6));
+        stampRot(g, P.fist.t, P.fist.pivot[0] + 0.5, P.fist.pivot[1] + 0.5, x, y, -fa);
+      };
+      const leg = (from) => {
+        let y = 10;
+        if (from === 'thigh') {
+          st(th, cx, y, 0);
+          y += len(th);
+        }
+        if (from !== 'foot') {
+          st(sh, cx, y, 0);
+          y += len(sh);
+        }
+        stampRot(g, P.shoe.t, P.shoe.pivot[0] + 0.5, P.shoe.pivot[1] + 0.5, cx, y - 1, 0);
+      };
+      const torsoRows = (r0, r1) => {
+        const t = P.torso;
+        const tpl = t.t.map((row, y) => (y >= r0 && y <= r1 ? row : '.'.repeat(row.length)));
+        stampRot(g, tpl, t.pivot[0] + 0.5, t.pivot[1] + 0.5, cx, 50, 0);
+      };
+      const waistRow = P.torso.pivot[1] - WAIST;
       if (name === 'head') {
         if (P.hairBack) stampRot(g, P.hairBack.t, P.hairBack.pivot[0] + 0.5, P.hairBack.pivot[1] + 0.5, cx, 40, 0);
         stampRot(g, P.head.t, P.head.pivot[0] + 0.5, P.head.pivot[1] + 0.5, cx, 40, 0);
-      } else if (name === 'armF' || name === 'armB') {
-        const up = name === 'armF' ? 'armUpF' : 'armUpB';
-        const lo = name === 'armF' ? 'armLoF' : 'armLoB';
-        const a = 0.3;
-        stampRot(g, P[up].t, P[up].pivot[0] + 0.5, P[up].pivot[1] + 0.5, cx, 14, ang0(P[up]) - a);
-        const ex = cx + Math.sin(a) * len(P[up]);
-        const ey = 14 + Math.cos(a) * len(P[up]);
-        const fa = a + 0.4;
-        stampRot(g, P[lo].t, P[lo].pivot[0] + 0.5, P[lo].pivot[1] + 0.5, ex, ey, ang0(P[lo]) - fa);
-        const hl = len(P[lo]) + 0.5;
-        const hx = ex + Math.sin(fa) * hl;
-        const hy = ey + Math.cos(fa) * hl;
-        if (name === 'armF' && sp.weapon) stampRot(g, sp.weapon.t, sp.weapon.grip[0] + 0.5, sp.weapon.grip[1] + 0.5, hx, hy, Math.PI - (fa + 1.6));
-        stampRot(g, P.fist.t, P.fist.pivot[0] + 0.5, P.fist.pivot[1] + 0.5, hx, hy, -fa);
-      } else if (name === 'legF' || name === 'legB') {
-        const th = name === 'legF' ? 'thighF' : 'thighB';
-        const sh = name === 'legF' ? 'shinF' : 'shinB';
-        stampRot(g, P[th].t, P[th].pivot[0] + 0.5, P[th].pivot[1] + 0.5, cx, 10, ang0(P[th]));
-        const ey = 10 + len(P[th]);
-        stampRot(g, P[sh].t, P[sh].pivot[0] + 0.5, P[sh].pivot[1] + 0.5, cx, ey, ang0(P[sh]));
-        stampRot(g, P.shoe.t, P.shoe.pivot[0] + 0.5, P.shoe.pivot[1] + 0.5, cx, ey + len(P[sh]) - 1, 0);
-      } else {
-        const t = P.torso;
-        stampRot(g, t.t, t.pivot[0] + 0.5, t.pivot[1] + 0.5, cx, 50, 0);
-      }
+      } else if (name === 'chest') torsoRows(0, waistRow - 1);
+      else if (name === 'pelvis') torsoRows(waistRow, 99);
+      else if (name === 'torso') torsoRows(0, 99);
+      else if (base === 'arm') arm('up');
+      else if (base === 'lo') arm('lo');
+      else if (base === 'fist' || base === 'hand') arm('fist');
+      else if (base === 'up') st(up, cx, 14, 0.3);
+      else if (base === 'low') st(lo, cx, 14, 0.5);
+      else if (base === 'leg') leg('thigh');
+      else if (base === 'knee') leg('shin');
+      else if (base === 'thigh') st(th, cx, 10, 0);
+      else if (base === 'shin') st(sh, cx, 10, 0);
+      else if (base === 'foot') leg('foot');
       const cv = Pix.render(g, sp.art.pal, { outlineColor: sp.outlineColor || '#050307' });
       const c = GS.Gore.crop(cv);
       return c ? c.canvas : cv;
@@ -324,6 +426,30 @@
     poseOf(anim, t = 0) {
       const map = this.spec.animMap;
       return M.pose((map && map[anim]) || anim, t);
+    }
+
+    // Toutes les poses distinctes d'animations (pré-calcul progressif, évite les saccades).
+    warmList(names) {
+      const map = this.spec.animMap || {};
+      const out = [];
+      for (const n0 of names) {
+        const n = map[n0] || n0;
+        const C = CYCLES[n];
+        const S = SEQ[n];
+        if (C) for (let f = 0; f < C.frames; f++) out.push(() => this.anim(n, ((f + 0.5) / C.frames) * C.dur));
+        else if (S) {
+          let acc = 0;
+          for (let i = 1; i < S.length; i++) {
+            const d = S[i][1];
+            for (let q = 0; q <= 4; q++) {
+              const t = acc + (d * q) / 4;
+              out.push(() => this.anim(n, t));
+            }
+            acc += d;
+          }
+        }
+      }
+      return out;
     }
 
     anim(anim, t = 0) {

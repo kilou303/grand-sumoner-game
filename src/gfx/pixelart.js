@@ -51,6 +51,21 @@
   };
 
   // Transforme une grille en canvas. Ajoute 1px de marge pour le contour automatique.
+  // Caches (le rendu est appelé à chaque nouvelle pose des persos modulaires).
+  const RGB = new Map();
+  const rgbOf = (hex) => {
+    let v = RGB.get(hex);
+    if (!v) RGB.set(hex, (v = U.hexToRgb(hex)));
+    return v;
+  };
+  const MIX = new Map();
+  const edgeOf = (n, oc) => {
+    const k = n + oc;
+    let v = MIX.get(k);
+    if (!v) MIX.set(k, (v = U.mix(n, oc, 0.8)));
+    return v;
+  };
+
   Pix.render = (grid, palette, opts = {}) => {
     const outline = opts.outline !== false;
     const pad = outline ? 1 : 0;
@@ -79,13 +94,13 @@
           else if (x < w - 1 && col[y * w + x + 1]) n = col[y * w + x + 1];
           else if (y > 0 && col[(y - 1) * w + x]) n = col[(y - 1) * w + x];
           else if (y < h - 1 && col[(y + 1) * w + x]) n = col[(y + 1) * w + x];
-          if (n) out[y * w + x] = opts.selective === false ? oc : U.mix(n, oc, 0.8);
+          if (n) out[y * w + x] = opts.selective === false ? oc : edgeOf(n, oc);
         }
       }
     }
     for (let i = 0; i < out.length; i++) {
       if (!out[i]) continue;
-      const [r, g, b] = U.hexToRgb(out[i]);
+      const [r, g, b] = rgbOf(out[i]);
       img.data[i * 4] = r;
       img.data[i * 4 + 1] = g;
       img.data[i * 4 + 2] = b;
