@@ -112,6 +112,9 @@
       this.P = spec.art.parts;
       this.cache = new Map();
       this.L = { thigh: len(this.P.thighF), shin: len(this.P.shinF) };
+      // membres arrachés (gore) : 'armF', 'armB', 'head'
+      this.lost = {};
+      this.lostKey = '';
       // palette assombrie pour les membres arrière (profondeur) : couleur la plus proche
       // d'une version assombrie de chaque teinte (garde la même famille de couleur)
       const pal = spec.art.pal;
@@ -171,9 +174,10 @@
       const pocketB = (pose.arms[0].hand || 'fist') === 'pocket';
       const pocketF = (pose.arms[1].hand || 'fist') === 'pocket';
       const torsoStamp = (part) => stampTorso(tg, P[part].t, P[part].pivot[0] + 0.5, P[part].pivot[1] + 0.5, hip.x, hip.y, lean, sy, pose.sway || 0, 5);
-      if (pocketB && P.pocketB) torsoStamp('pocketB');
+      const lost = this.lost;
+      if (pocketB && P.pocketB && !lost.armB) torsoStamp('pocketB');
       const map = torsoStamp('torso');
-      if (pocketF && P.pocketF) torsoStamp('pocketF');
+      if (pocketF && P.pocketF && !lost.armF) torsoStamp('pocketF');
       const local = (j) => [j[0] - (J.hip[0] - tp.pivot[0]), j[1] - (J.hip[1] - tp.pivot[1])];
       const shF = map(...local(J.shoulderF));
       const shB = map(...local(J.shoulderB));
@@ -186,6 +190,7 @@
 
       let handF = null;
       const drawArm = (arm, front) => {
+        if (lost[front ? 'armF' : 'armB']) return;
         if ((arm.hand || 'fist') === 'pocket' && P.pocketF) return;
         const sh = front ? shF : shB;
         // les deux bras sont identiques (même texture, pas d'assombrissement)
@@ -200,6 +205,11 @@
         const hl = len(P[loN]) + 0.5;
         const hx = u.ex + Math.sin(fa) * hl;
         const hy = u.ey + Math.cos(fa) * hl;
+        const W = sp.weapon;
+        if (front && W && pose.wpn !== 'none' && hand !== 'pocket') {
+          const wa = pose.wabs !== undefined ? pose.wabs : fa + (pose.wr !== undefined ? pose.wr : 1.6);
+          cells = cells.concat(stampRot(g, W.t, W.grip[0] + 0.5, W.grip[1] + 0.5, hx, hy, Math.PI - wa));
+        }
         if (hand !== 'pocket') {
           const f = P.fist;
           cells = cells.concat(stampRot(g, f.t, f.pivot[0] + 0.5, f.pivot[1] + 0.5, hx, hy, -fa, mp));
@@ -212,24 +222,95 @@
       if (backBehind) drawArm(pose.arms[0], false);
       drawLeg(pose.legs[0], false);
       drawLeg(pose.legs[1], true);
+      const headRot = (pose.tilt || 0) + lean * 0.5;
+      const hy0 = neck.y + (pose.hy || 0) - (sp.headLift || 0);
+      if (P.hairBack && !lost.head) {
+        const hb = P.hairBack;
+        stampRot(g, hb.t, hb.pivot[0] + 0.5, hb.pivot[1] + 0.5, neck.x + (pose.hx || 0), hy0, headRot * 0.6);
+      }
       for (let y = 0; y < CH; y++) for (let x = 0; x < CW; x++) if (tg[y][x] !== '.') g[y][x] = tg[y][x];
       const hp = P.head;
-      stampRot(g, hp.t, hp.pivot[0] + 0.5, hp.pivot[1] + 0.5, neck.x + (pose.hx || 0), neck.y + (pose.hy || 0), (pose.tilt || 0) + lean * 0.5);
+      if (!lost.head) stampRot(g, hp.t, hp.pivot[0] + 0.5, hp.pivot[1] + 0.5, neck.x + (pose.hx || 0), neck.y + (pose.hy || 0) - (sp.headLift || 0), (pose.tilt || 0) + lean * 0.5);
       if (!backBehind && !pose.swap) drawArm(pose.arms[0], false);
       drawArm(pose.arms[1], true);
       if (pose.swap) drawArm(pose.arms[0], false);
 
       const canvas = Pix.render(g, sp.art.pal, { outlineColor: sp.outlineColor || '#050307' });
+      // moignons sanglants
+      const stump = (x, y, w, h) => {
+        const c = canvas.getContext('2d');
+        c.fillStyle = '#5a040c';
+        c.fillRect(Math.round(x - w / 2), Math.round(y - h / 2), w, h);
+        c.fillStyle = '#c01020';
+        c.fillRect(Math.round(x - w / 2) + 1, Math.round(y - h / 2) + 1, Math.max(1, w - 2), Math.max(1, h - 2));
+      };
+      if (lost.armB) stump(shB.x + 1, shB.y + 1, 4, 4);
+      if (lost.armF) stump(shF.x + 1, shF.y + 1, 4, 4);
+      if (lost.head) stump(neck.x + 1, neck.y, 6, 3);
       return {
         canvas,
         hand: handF ? { x: handF.x + 1, y: handF.y + 1, ang: handF.ang } : null,
         head: { x: neck.x + 1, y: neck.y - 9 + 1 },
+        shF: { x: shF.x + 1, y: shF.y + 1 },
+        shB: { x: shB.x + 1, y: shB.y + 1 },
+        neck: { x: neck.x + 1, y: neck.y + 1 },
+        hip: { x: hip.x + 1, y: hip.y + 1 },
       };
+    }
+
+    // Arrache un membre : les images suivantes sont rendues sans lui.
+    lose(part) {
+      if (this.lost[part]) return false;
+      this.lost[part] = true;
+      this.lostKey = Object.keys(this.lost).sort().join(',');
+      this.cache.clear();
+      return true;
+    }
+
+    // Image isolée d'une partie du corps (morceaux qui volent) : 'head', 'armF', 'armB',
+    // 'legF', 'legB', 'torso'. Renvoie un canvas recadré.
+    partCanvas(name) {
+      const P = this.P;
+      const sp = this.spec;
+      const S = 64;
+      const g = Pix.grid(S, S);
+      const cx = S / 2;
+      if (name === 'head') {
+        if (P.hairBack) stampRot(g, P.hairBack.t, P.hairBack.pivot[0] + 0.5, P.hairBack.pivot[1] + 0.5, cx, 40, 0);
+        stampRot(g, P.head.t, P.head.pivot[0] + 0.5, P.head.pivot[1] + 0.5, cx, 40, 0);
+      } else if (name === 'armF' || name === 'armB') {
+        const up = name === 'armF' ? 'armUpF' : 'armUpB';
+        const lo = name === 'armF' ? 'armLoF' : 'armLoB';
+        const a = 0.3;
+        stampRot(g, P[up].t, P[up].pivot[0] + 0.5, P[up].pivot[1] + 0.5, cx, 14, ang0(P[up]) - a);
+        const ex = cx + Math.sin(a) * len(P[up]);
+        const ey = 14 + Math.cos(a) * len(P[up]);
+        const fa = a + 0.4;
+        stampRot(g, P[lo].t, P[lo].pivot[0] + 0.5, P[lo].pivot[1] + 0.5, ex, ey, ang0(P[lo]) - fa);
+        const hl = len(P[lo]) + 0.5;
+        const hx = ex + Math.sin(fa) * hl;
+        const hy = ey + Math.cos(fa) * hl;
+        if (name === 'armF' && sp.weapon) stampRot(g, sp.weapon.t, sp.weapon.grip[0] + 0.5, sp.weapon.grip[1] + 0.5, hx, hy, Math.PI - (fa + 1.6));
+        stampRot(g, P.fist.t, P.fist.pivot[0] + 0.5, P.fist.pivot[1] + 0.5, hx, hy, -fa);
+      } else if (name === 'legF' || name === 'legB') {
+        const th = name === 'legF' ? 'thighF' : 'thighB';
+        const sh = name === 'legF' ? 'shinF' : 'shinB';
+        stampRot(g, P[th].t, P[th].pivot[0] + 0.5, P[th].pivot[1] + 0.5, cx, 10, ang0(P[th]));
+        const ey = 10 + len(P[th]);
+        stampRot(g, P[sh].t, P[sh].pivot[0] + 0.5, P[sh].pivot[1] + 0.5, cx, ey, ang0(P[sh]));
+        stampRot(g, P.shoe.t, P.shoe.pivot[0] + 0.5, P.shoe.pivot[1] + 0.5, cx, ey + len(P[sh]) - 1, 0);
+      } else {
+        const t = P.torso;
+        stampRot(g, t.t, t.pivot[0] + 0.5, t.pivot[1] + 0.5, cx, 50, 0);
+      }
+      const cv = Pix.render(g, sp.art.pal, { outlineColor: sp.outlineColor || '#050307' });
+      const c = GS.Gore.crop(cv);
+      return c ? c.canvas : cv;
     }
 
     frame(pose) {
       const q = quant(pose);
-      const key = JSON.stringify(q);
+      const key = this.lostKey + JSON.stringify(q);
       let f = this.cache.get(key);
       if (!f) {
         f = this.render(q);
@@ -241,11 +322,13 @@
 
     // anim : nom d'un cycle, d'une séquence ou d'une pose-clé ; t en secondes.
     poseOf(anim, t = 0) {
-      return M.pose(anim, t);
+      const map = this.spec.animMap;
+      return M.pose((map && map[anim]) || anim, t);
     }
 
     anim(anim, t = 0) {
-      return this.frame(M.pose(anim, t));
+      const map = this.spec.animMap;
+      return this.frame(M.pose((map && map[anim]) || anim, t));
     }
   }
   M.Char = ModChar;
@@ -255,6 +338,9 @@
     return {
       swap: !!p.swap,
       backArm: p.backArm || 'behind',
+      wr: p.wr === undefined ? undefined : q1(p.wr),
+      wabs: p.wabs === undefined ? undefined : q1(p.wabs),
+      wpn: p.wpn,
       twist: q1(p.twist),
       x: Math.round(p.x || 0),
       y: Math.round(p.y || 0),
@@ -273,6 +359,9 @@
   M.blend = (p, q, t) => ({
     swap: t < 0.5 ? p.swap : q.swap,
     backArm: t < 0.5 ? p.backArm : q.backArm,
+    wpn: t < 0.5 ? p.wpn : q.wpn,
+    wr: p.wr === undefined && q.wr === undefined ? undefined : lerp(p.wr === undefined ? 1.6 : p.wr, q.wr === undefined ? 1.6 : q.wr, t),
+    wabs: p.wabs !== undefined && q.wabs !== undefined ? lerp(p.wabs, q.wabs, t) : t < 0.5 ? p.wabs : q.wabs,
     twist: lerp(p.twist || 0, q.twist || 0, t),
     x: lerp(p.x || 0, q.x || 0, t),
     y: lerp(p.y || 0, q.y || 0, t),
@@ -320,6 +409,28 @@
     land: { lean: 0.25, squash: -0.08, legs: [{ a: -0.8, k: 1.5 }, { a: 0.7, k: 1.6 }], arms: PP },
     dash: { lean: 0.5, sway: -3, legs: [{ a: -1.1, k: 0.45 }, { a: 0.75, k: 1.4 }], arms: PP },
   });
+
+  // poses avec arme (épée, lance, bâton, arc...) : le poing avant tient l'arme
+  const ARM_POSES = {
+    aidle: { legs: [{ a: -0.14, k: 0.06 }, { a: 0.16, k: 0.06 }], arms: [PK, { a: 0.3, e: 0.5 }], wr: 1.7 },
+    astance1: { lean: 0.06, x: -1, legs: [{ a: -0.42, k: 0.38 }, { a: 0.34, k: 0.46 }], arms: [PK, { a: 0.55, e: 0.6 }], wr: 1.45 },
+    astance2: { lean: 0.04, x: -1, y: 1, squash: -0.02, legs: [{ a: -0.44, k: 0.48 }, { a: 0.36, k: 0.56 }], arms: [PK, { a: 0.5, e: 0.65 }], wr: 1.5 },
+    slashWind: { lean: -0.12, x: -3, sway: -1, legs: [{ a: -0.5, k: 0.5 }, { a: 0.36, k: 0.6 }], arms: [PK, { a: -2.7, e: -0.3 }], wr: -0.4 },
+    slash: { lean: 0.32, x: 5, sway: 2, legs: [{ a: -0.75, k: 0.12 }, { a: 0.6, k: 0.5 }], arms: [PK, { a: 1.35, e: 0.05 }], wr: -0.35 },
+    slashLow: { lean: 0.15, x: 0, legs: [{ a: -0.6, k: 0.7 }, { a: 0.5, k: 0.8 }], arms: [PK, { a: -0.5, e: 0.2 }], wr: -0.7 },
+    slashUp: { lean: -0.05, x: 4, y: -2, legs: [{ a: -0.4, k: 0.2 }, { a: 0.5, k: 0.4 }], arms: [PK, { a: 2.5, e: 0.15 }], wr: 0.3 },
+    thrustWind: { lean: -0.05, x: -3, legs: [{ a: -0.5, k: 0.5 }, { a: 0.4, k: 0.6 }], arms: [PK, { a: -0.3, e: 1.85 }], wabs: 1.57 },
+    thrust: { lean: 0.36, x: 7, sway: 2, legs: [{ a: -0.85, k: 0.05 }, { a: 0.65, k: 0.5 }], arms: [PK, { a: 1.55, e: 0.0 }], wabs: 1.57 },
+    castStaff: { lean: -0.06, legs: [{ a: -0.3, k: 0.15 }, { a: 0.3, k: 0.2 }], arms: [PK, { a: 2.55, e: 0.25 }], wabs: Math.PI },
+    drawBow: { backArm: 'front', twist: 0.5, lean: 0.05, legs: [{ a: -0.45, k: 0.3 }, { a: 0.4, k: 0.35 }], arms: [{ a: 1.35, e: 2.5 }, { a: 1.55, e: 0.0 }], wabs: Math.PI },
+    shoot: { backArm: 'front', twist: 0.4, lean: -0.05, x: -2, legs: [{ a: -0.45, k: 0.3 }, { a: 0.4, k: 0.35 }], arms: [{ a: 0.9, e: 1.9 }, { a: 1.55, e: 0.0 }], wabs: Math.PI },
+    avictory: { tilt: -0.08, legs: [{ a: -0.15, k: 0.04 }, { a: 0.15, k: 0.04 }], arms: [PK, { a: 2.95, e: 0.1 }], wabs: Math.PI },
+    ahurt: { lean: -0.3, x: -4, tilt: -0.2, sway: -2, legs: [{ a: -0.35, k: 0.55 }, { a: 0.4, k: 0.7 }], arms: [PK, { a: -0.5, e: 0.7 }], wr: 1.2 },
+    ako: { lean: -0.25, tilt: 0.25, legs: [{ a: -0.6, k: 1.2 }, { a: 0.5, k: 1.4 }], arms: [PK, { a: 0.4, e: 0.5 }], wr: 1.6 },
+    ajump: { lean: 0.15, y: -10, legs: [{ a: 0.6, k: 1.7 }, { a: 1.1, k: 2.0 }], arms: [PK, { a: 0.9, e: 0.9 }], wr: 1.4 },
+    aland: { lean: 0.25, squash: -0.08, legs: [{ a: -0.8, k: 1.5 }, { a: 0.7, k: 1.6 }], arms: [PK, { a: 0.9, e: 0.6 }], wr: 1.4 },
+  };
+  Object.assign(K, ARM_POSES);
 
   // ------------------------------------------------------------ cycles
   const TAU = Math.PI * 2;
@@ -379,6 +490,19 @@
     },
   });
 
+  const withWeapon = (pose, arm, extra) => Object.assign({}, pose, { arms: [PK, arm] }, extra);
+  CYCLES.astance = { frames: 6, dur: 1.2, pose: (p) => M.blend(K.astance1, K.astance2, (1 - Math.cos(p * TAU)) / 2) };
+  CYCLES.awalk = {
+    frames: 8,
+    dur: 0.84,
+    pose: (p) => withWeapon(CYCLES.walk.pose(p), { a: 0.3 + Math.sin(p * TAU) * 0.15, e: 0.5 }, { wr: 1.7 }),
+  };
+  CYCLES.arun = {
+    frames: 8,
+    dur: 0.5,
+    pose: (p) => withWeapon(CYCLES.run.pose(p), { a: -0.5 + Math.sin(p * TAU) * 0.2, e: 0.9 }, { wabs: -2.3 }),
+  };
+
   // ------------------------------------------------------------ séquences d'attaque
   // Liste de [pose, durée] ; on interpole avec un easing (anticipation -> frappe -> retour).
   const SEQ = (M.SEQ = {
@@ -390,9 +514,16 @@
     hurt: [['hurt', 0.0], ['hurt', 0.16], ['guard', 0.2]],
     power: [['guard', 0.0], ['crouch', 0.12], ['power', 0.1], ['power', 0.6]],
     cast: [['guard', 0.0], ['cast', 0.15], ['cast', 0.3], ['guard', 0.15]],
+    // avec arme
+    slashA: [['astance1', 0.0], ['slashWind', 0.08], ['slash', 0.05], ['slash', 0.08], ['astance1', 0.12]],
+    slashB: [['astance1', 0.0], ['slashLow', 0.07], ['slashUp', 0.05], ['slashUp', 0.08], ['astance1', 0.12]],
+    thrust: [['astance1', 0.0], ['thrustWind', 0.08], ['thrust', 0.05], ['thrust', 0.08], ['astance1', 0.12]],
+    shoot: [['astance1', 0.0], ['drawBow', 0.12], ['drawBow', 0.06], ['shoot', 0.05], ['shoot', 0.08], ['astance1', 0.12]],
+    castStaff: [['astance1', 0.0], ['castStaff', 0.15], ['castStaff', 0.3], ['astance1', 0.15]],
+    ahurt: [['ahurt', 0.0], ['ahurt', 0.16], ['astance1', 0.2]],
   });
   // instant (secondes) du coup dans chaque séquence
-  M.HIT = { jab: 0.12, cross: 0.12, uppercut: 0.15, kick: 0.13, airKick: 0.22, power: 0.22, cast: 0.15 };
+  M.HIT = { jab: 0.12, cross: 0.12, uppercut: 0.15, kick: 0.13, airKick: 0.22, power: 0.22, cast: 0.15, slashA: 0.13, slashB: 0.12, thrust: 0.13, shoot: 0.23, castStaff: 0.15 };
 
   M.seqDur = (name) => SEQ[name].reduce((s, k) => s + k[1], 0);
 

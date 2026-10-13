@@ -112,8 +112,16 @@
     const def = GS.ENEMIES[key](el);
     const k = GS.stageScale(level);
     let sprite;
-    // les monstres sont agrandis (x2 par défaut) pour être à l'échelle des héros grand format
-    if (def.art[0] === 'm') {
+    let art = null;
+    const rs = def.art[0] === 'r' ? def.art[2] || 1 : 1;
+    if (def.art[0] === 'c') {
+      sprite = GS.Curses.build(key, def.art[1], def.art[2] || {});
+    } else if (def.art[0] === 'r') {
+      // humain au format de Djegui (rig modulaire, une instance par ennemi pour le gore)
+      const spec = def.art[1];
+      art = new GS.Art.CharArt({ id: 'enemy-' + key, rig: () => GS.Variants.charSpec(key, spec) });
+      sprite = { w: Math.round(34 * rs), h: Math.round(60 * rs), proxy: true };
+    } else if (def.art[0] === 'm') {
       const o = Object.assign({ scale: 2 }, def.art[2] || {});
       sprite = GS.MonsterArt.build(key + (el || '') + JSON.stringify(o), def.art[1], o);
     } else sprite = GS.MonsterArt.buildHumanoid(key, def.art[1], def.art[2] || 2);
@@ -134,11 +142,18 @@
       sp: 0,
       sl: 0,
       sprite,
-      h: sprite.h - 4,
+      h: art ? Math.round(58 * rs) : sprite.h - 4,
       homeX: pos[0],
       homeY: pos[1],
     });
     if (sprite.flying) f.fly = true;
+    if (art) {
+      f.art = art;
+      f.rig = true;
+      f.rscale = rs;
+      f.anim = 'stance';
+    }
+    if (def.aura) f.aura = true;
     return f;
   };
 

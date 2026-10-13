@@ -22,7 +22,7 @@
       }
     }
     draw(ctx) {
-      GS.BG.draw('town', this.t, Math.sin(this.t * 0.15) * 12, 0);
+      GS.BG.draw('street', this.t, 200 + Math.sin(this.t * 0.15) * 12, 0);
       const team = GS.Save.teamUnits();
       const lead = team[0];
       // Chef d'équipe en grand

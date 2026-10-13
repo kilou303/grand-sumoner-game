@@ -32,6 +32,8 @@
     // ============================================================ ★5
     {
       id: 'kaelen',
+      rigSpec: { head: 'spiky', hair: '#f4e6a8', jacket: '#3a5cc8', pants: '#2a2c48', shoes: '#f0f0f8', skin: '#f2c8a6', eyes: '#3aa0ff', weapon: 'sword', blade: '#f4e4b0', gem: '#ffe060' },
+      rig: () => GS.Variants.char('kaelen'),
       name: 'Kaelen',
       title: 'Lame Solaire',
       rarity: 5,
@@ -49,6 +51,8 @@
     },
     {
       id: 'nyx',
+      rigSpec: { head: 'hood', hood: '#6a44b8', jacket: '#3a2a58', pants: '#1c1828', shoes: '#c8b8e8', skin: '#f2d6c8', eyes: '#ff3a7a', weapon: 'scythe', blade: '#d8d0ff', gem: '#ff60c0' },
+      rig: () => GS.Variants.char('nyx'),
       name: 'Nyx',
       title: 'Faucheuse Astrale',
       rarity: 5,
@@ -66,6 +70,8 @@
     },
     {
       id: 'ignara',
+      rigSpec: { head: 'ponytail', hair: '#ff5a2a', jacket: '#b8283a', pants: '#3a1820', shoes: '#f0d8b0', skin: '#f4caa8', eyes: '#ffa020', weapon: 'staff', gem: '#ff8030' },
+      rig: () => GS.Variants.char('ignara'),
       name: 'Ignara',
       title: 'Reine des Braises',
       rarity: 5,
@@ -83,6 +89,8 @@
     },
     {
       id: 'thalassa',
+      rigSpec: { head: 'long', hair: '#62c0ff', jacket: '#e8f0ff', pants: '#2a4a80', shoes: '#ffffff', skin: '#f2d2b8', eyes: '#2a70d0', weapon: 'spear', blade: '#c0f0ff', gem: '#80f0ff' },
+      rig: () => GS.Variants.char('thalassa'),
       name: 'Thalassa',
       title: 'Prêtresse des Marées',
       rarity: 5,
@@ -100,6 +108,8 @@
     },
     {
       id: 'gaius',
+      rigSpec: { head: 'mane', hair: '#3f8a3a', jacket: '#5f8a48', pants: '#4a3828', shoes: '#c0a880', skin: '#b87a50', eyes: '#50e070', weapon: 'hammer', blade: '#a0f0b0', gem: '#60ff90' },
+      rig: () => GS.Variants.char('gaius'),
       name: 'Gaïus',
       title: 'Titan de Jade',
       rarity: 5,
@@ -119,6 +129,8 @@
     // ============================================================ ★4
     {
       id: 'rook',
+      rigSpec: { head: 'helmet', metal: '#b8c4d8', jacket: '#3a7a40', pants: '#2a3a2a', shoes: '#9aa4b4', skin: '#e8b890', eyes: '#40a040', weapon: 'sword' },
+      rig: () => GS.Variants.char('rook'),
       name: 'Rook',
       title: 'Chevalier de Fer',
       rarity: 4,
@@ -136,6 +148,8 @@
     },
     {
       id: 'mira',
+      rigSpec: { head: 'bob', hair: '#f4d468', jacket: '#ece4cc', pants: '#5a4430', shoes: '#f0f0e0', skin: '#f4d0b0', eyes: '#40a0e0', weapon: 'bow' },
+      rig: () => GS.Variants.char('mira'),
       name: 'Mira',
       title: 'Archère du Vent',
       rarity: 4,
@@ -153,6 +167,8 @@
     },
     {
       id: 'zeph',
+      rigSpec: { head: 'hood', hood: '#3a3a5a', jacket: '#2c2c44', pants: '#16161e', shoes: '#5a5a7a', skin: '#e8c0a0', eyes: '#c040ff', weapon: 'dagger', gem: '#c060ff' },
+      rig: () => GS.Variants.char('zeph'),
       name: 'Zeph',
       title: 'Ninja Fantôme',
       rarity: 4,
@@ -170,6 +186,8 @@
     },
     {
       id: 'brann',
+      rigSpec: { head: 'mane', hair: '#d02828', jacket: '#7a3020', pants: '#3a2a20', shoes: '#a08060', skin: '#e0a07a', eyes: '#ff8030', weapon: 'axe' },
+      rig: () => GS.Variants.char('brann'),
       name: 'Brann',
       title: 'Berserker Écarlate',
       rarity: 4,
@@ -187,6 +205,8 @@
     },
     {
       id: 'coralie',
+      rigSpec: { head: 'twintails', hair: '#40c8c8', jacket: '#2060a8', pants: '#e8e8f0', shoes: '#3a2a20', skin: '#f4d0b8', eyes: '#20a0a0', weapon: 'rapier', gem: '#ff6080' },
+      rig: () => GS.Variants.char('coralie'),
       name: 'Coralie',
       title: 'Duelliste des Flots',
       rarity: 4,
@@ -206,6 +226,8 @@
     // ============================================================ ★3
     {
       id: 'pip',
+      rigSpec: { head: 'short', hair: '#8a5030', jacket: '#d86a20', pants: '#4a3020', shoes: '#f0e0c0', skin: '#f4caa8', eyes: '#a05020', weapon: 'staff', gem: '#ff7020' },
+      rig: () => GS.Variants.char('pip'),
       name: 'Pip',
       title: 'Apprenti Pyromancien',
       rarity: 3,
@@ -223,6 +245,8 @@
     },
     {
       id: 'lina',
+      rigSpec: { head: 'bob', hair: '#f8e090', jacket: '#f4ece8', pants: '#c890b0', shoes: '#ffffff', skin: '#f6d6c0', eyes: '#e070a0', weapon: 'staff', gem: '#ffe0f0' },
+      rig: () => GS.Variants.char('lina'),
       name: 'Lina',
       title: 'Novice du Temple',
       rarity: 3,
@@ -240,6 +264,8 @@
     },
     {
       id: 'toran',
+      rigSpec: { head: 'short', hair: '#5a3a22', jacket: '#6a8a40', pants: '#3a3020', shoes: '#a08860', skin: '#e0ac80', eyes: '#6a4a2a', weapon: 'spear' },
+      rig: () => GS.Variants.char('toran'),
       name: 'Toran',
       title: 'Garde du Village',
       rarity: 3,
@@ -257,6 +283,8 @@
     },
     {
       id: 'sly',
+      rigSpec: { head: 'hood', hood: '#4a6a3a', jacket: '#5a5038', pants: '#2a2418', shoes: '#806848', skin: '#d8a880', eyes: '#a0e040', weapon: 'dagger' },
+      rig: () => GS.Variants.char('sly'),
       name: 'Sly',
       title: 'Voleur des Ruelles',
       rarity: 3,
@@ -274,6 +302,8 @@
     },
     {
       id: 'mael',
+      rigSpec: { head: 'short', hair: '#2a3a5a', jacket: '#3a70a0', pants: '#d8c8a0', shoes: '#3a2a20', skin: '#c88a60', eyes: '#3060a0', weapon: 'spear', blade: '#e0e8f0' },
+      rig: () => GS.Variants.char('mael'),
       name: 'Maël',
       title: 'Harponneur',
       rarity: 3,
@@ -291,6 +321,8 @@
     },
     {
       id: 'elwin',
+      rigSpec: { head: 'long', acc: 'elf', hair: '#c8e870', jacket: '#3a7a3a', pants: '#5a4028', shoes: '#c0a070', skin: '#f2d2b0', eyes: '#40b040', weapon: 'bow' },
+      rig: () => GS.Variants.char('elwin'),
       name: 'Elwin',
       title: 'Ranger Sylvestre',
       rarity: 3,

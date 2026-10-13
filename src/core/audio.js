@@ -136,6 +136,21 @@
         tone({ f: 1600, f2: 1400, dur: 0.15, type: 'pulse0.125', vol: 0.12 });
         tone({ f: 120, f2: 40, dur: 0.2, type: 'triangle', vol: 0.35 });
         break;
+      case 'gore':
+        // explosion de chair : craquement grave + éclaboussures
+        noise({ f: 700, f2: 60, dur: 0.55, vol: 0.6 });
+        tone({ f: 70, f2: 25, dur: 0.45, type: 'sine', vol: 0.55 });
+        for (let i = 0; i < 6; i++) noise({ f: 1200 + Math.random() * 1500, f2: 300, dur: 0.07, filter: 'bandpass', q: 4, vol: 0.25, delay: 0.06 + i * 0.05 + Math.random() * 0.03 });
+        break;
+      case 'sever':
+        // membre tranché : chuintement + craquement d'os
+        noise({ f: 5000, f2: 900, dur: 0.12, filter: 'bandpass', q: 3, vol: 0.35 });
+        tone({ f: 300, f2: 90, dur: 0.08, type: 'square', vol: 0.12, delay: 0.03 });
+        noise({ f: 1400, f2: 400, dur: 0.25, filter: 'bandpass', q: 2, vol: 0.2, delay: 0.06 });
+        break;
+      case 'splat':
+        noise({ f: 900, f2: 200, dur: 0.09, filter: 'bandpass', q: 3, vol: 0.18 });
+        break;
       case 'heavy':
         noise({ f: 900, f2: 60, dur: 0.5, vol: 0.5 });
         tone({ f: 90, f2: 30, dur: 0.5, type: 'sine', vol: 0.5 });

@@ -36,7 +36,7 @@
       }
     }
     draw(ctx) {
-      GS.BG.draw('town', this.t, 0, 0);
+      GS.BG.draw('school', this.t, 0, 0);
       R.fade(0.5, '#05030c');
       if (this.detail) {
         this.drawDetail(ctx);

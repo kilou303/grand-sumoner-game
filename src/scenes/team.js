@@ -41,7 +41,7 @@
       GS.Audio.sfx('confirm');
     }
     draw(ctx) {
-      GS.BG.draw('castle', this.t, this.t * 4, 0);
+      GS.BG.draw('subway', this.t, this.t * 4, 0);
       R.fade(0.35, '#05030c');
       if (UI().topBar('ÉQUIPE', { back: true })) {
         GS.go(this.back());
@@ -69,11 +69,11 @@
       }
       F().draw('Puissance : ' + U.fmt(GS.Save.teamPower()), 30, 152, { color: '#ffe080' });
       const cur = GS.Save.unit(team[this.slot]);
-      if (cur && team.length > 1 && UI().button('RETIRER', 330, 148, 70, 14, { id: 't_rm', sfx: 'back', cut: 4 })) {
+      if (cur && team.length > 1 && UI().button('RETIRER', 400, 148, 66, 14, { id: 't_rm', sfx: 'back', cut: 4 })) {
         GS.data.team.splice(this.slot, 1);
         GS.Save.save();
       }
-      F().draw("Choisis un emplacement puis un héros :", 160, 152, { color: R.COL.dim });
+      F().draw('Choisis un emplacement puis un héros', 150, 152, { color: R.COL.dim });
       // liste des héros
       const list = GS.data.units.slice().sort((a, b) => GS.UNIT[b.id].rarity - GS.UNIT[a.id].rarity || b.level - a.level);
       ctx.save();

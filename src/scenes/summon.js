@@ -89,7 +89,7 @@
 
     // ---------------------------------------------------------------- rendu
     drawSky(color) {
-      GS.BG.draw('castle', this.t, this.t * 8, 0);
+      GS.BG.draw('shrine', this.t, this.t * 8, 0);
       R.fade(0.55, '#05030c');
       UI().rays(GS.W / 2, 150, color, this.t, 16, 400, 0.08);
     }

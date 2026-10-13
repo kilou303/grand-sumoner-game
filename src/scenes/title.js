@@ -26,7 +26,7 @@
       }
     }
     draw(ctx) {
-      GS.BG.draw('castle', this.t, this.t * 10, 0);
+      GS.BG.draw('street', this.t, this.t * 10, 0);
       R.fade(0.3, '#05030c');
       this.fx.draw(ctx);
       const lead = GS.UNIT.djegui || GS.UNITS[0];

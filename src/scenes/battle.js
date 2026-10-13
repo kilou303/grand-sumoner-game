@@ -123,6 +123,8 @@
         x += 560;
       }
       this.levelLen = prev + 320;
+      // sang et morceaux : les flaques restent au sol tout le niveau
+      this.gore = new GS.Gore.Layer(this.levelLen + W() + 200);
       // ennemis de la première rencontre, déjà en place sur la map
       this.spawnGroup(0);
     }
@@ -557,16 +559,45 @@
         this.fx.pop(tgt.cx, tgt.topY - 14, '+' + g + ' OR', { color: '#ffd040', dur: 1.2 });
         A().sfx('coin');
       }
+      this.bleed(f, tgt, r, big);
       if (tgt.hp <= 0) {
         tgt.alive = false;
         if (f.isHero) f.sl = Math.min(100, f.sl + 10);
-        this.co.run(this.koAnim(tgt));
+        this.co.run(this.koAnim(tgt, f));
+      } else if (!tgt.isHero && (tgt.cuts || 0) < 2) {
+        // coups violents : un membre peut être tranché
+        const low = tgt.hp / tgt.maxHp < 0.5;
+        const chance = r.crit ? 0.55 : big ? 0.3 : low ? 0.1 : 0;
+        if (Math.random() < chance) this.sever(f, tgt);
       }
       return r;
     }
 
     shake(v) {
       this.cam.shake = Math.max(this.cam.shake, v);
+    }
+
+    // ---------------------------------------------------------------- gore
+    hitDir(f, tgt) {
+      return tgt.x >= f.x ? 1 : -1;
+    }
+    // Giclée de sang à chaque coup.
+    bleed(f, tgt, r, big) {
+      const cols = GS.Gore.Layer.bloodOf(tgt);
+      const d = this.hitDir(f, tgt);
+      const n = tgt.isHero ? (r.crit ? 10 : 5) : r.crit ? 30 : big ? 18 : 10;
+      this.gore.spray(tgt.cx - d * 2, tgt.cy + U.rand(-6, 4) + (tgt.fly ? -16 : 0), tgt.y, cols, { n, speed: r.crit ? 180 : 125, angle: -Math.PI / 2 + d * 0.95, spread: 1.4, vx: d * 30 });
+      if (!tgt.isHero) A().sfx('splat');
+    }
+    // Membre tranché.
+    sever(f, tgt) {
+      const part = this.gore.dismember(tgt, this.hitDir(f, tgt));
+      if (!part) return;
+      A().sfx('sever');
+      this.shake(3);
+      this.hitstop = Math.max(this.hitstop, 0.09);
+      const label = part === 'head' ? 'DÉCAPITÉ !' : part === 'armF' || part === 'armB' ? 'BRAS TRANCHÉ !' : 'TRANCHÉ !';
+      this.fx.pop(tgt.cx, tgt.topY - 16 - (tgt.slot % 2) * 11, label, { color: '#ff2a3a', dur: 1.1 });
     }
     colOf(f) {
       return f.def.fxColor || GS.EL[f.element].color;
@@ -600,35 +631,47 @@
       this.dim = 0.6;
     }
 
-    *koAnim(f) {
-      A().sfx('ko');
+    *koAnim(f, by) {
       f.flash = 1;
       f.flashColor = '#ff4060';
       f.charging = null;
+      if (!f.isHero) {
+        // l'ennemi explose en morceaux (façon Happy Wheels)
+        A().sfx('gore');
+        const power = f.boss ? 1.5 : 1;
+        this.gore.explode(f, power, f.rig ? null : this.fighterImage(f));
+        const cy = f.cy + (f.fly ? -16 : 0);
+        this.fx.ring(f.cx, cy, { color: '#c01020', r0: 4, r1: f.boss ? 50 : 30, dur: 0.3, width: 2 });
+        this.fx.burst(f.cx, cy, { n: 16, color: ['#8a0814', '#5a040c', '#c01020'], speed: 150, life: 0.45, add: false, gravity: 300 });
+        this.shake(f.boss ? 7 : 4);
+        this.hitstop = Math.max(this.hitstop, f.boss ? 0.2 : 0.07);
+        if (f.boss) {
+          this.screenFlash = 0.8;
+          this.flashColor = '#ff2030';
+        }
+        f.ko = 1;
+        yield 0.3;
+        return;
+      }
+      A().sfx('ko');
       if (f.rig) {
         f.anim = 'ko';
         f.at = 0;
       }
-      if (!f.isHero) {
-        const col = U.rgbToHex(...this.spriteColor(f));
-        this.fx.burst(f.cx, f.cy, { n: 30, color: [col, '#ffffff', U.shade(col, 0.4)], speed: 70, life: 0.8, jitter: 16, gravity: -30 });
-      }
-      yield* GS.tween(f, { ko: 1 }, f.isHero ? 0.4 : 0.6, E.outQuad);
-    }
-
-    spriteColor(f) {
-      if (f._col) return f._col;
-      try {
-        const c = f.sprite.body.getContext('2d');
-        const d = c.getImageData(Math.floor(f.sprite.w / 2), Math.floor(f.sprite.h / 2), 1, 1).data;
-        f._col = d[3] ? [d[0], d[1], d[2]] : [200, 200, 220];
-      } catch (err) {
-        f._col = [200, 200, 220];
-      }
-      return f._col;
+      yield* GS.tween(f, { ko: 1 }, 0.4, E.outQuad);
     }
 
     // ---------------------------------------------------------------- animations
+    weaponOf(f) {
+      return f.rig && f.art.rig.spec.weapon ? f.art.rig.spec.weapon.kind : null;
+    }
+    // Coup de mêlée d'un héros modulaire selon son arme.
+    meleeMove(f, i, thrust) {
+      const w = this.weaponOf(f);
+      if (!w) return i % 2 ? 'cross' : 'jab';
+      if (thrust || w === 'spear' || w === 'rapier') return 'thrust';
+      return i % 2 ? 'slashB' : 'slashA';
+    }
     dirOf(f) {
       return f.isHero ? 1 : -1;
     }
@@ -776,12 +819,22 @@
           tgt = alt[0];
         }
         if (f.rig) {
-          const move = i % 2 ? 'cross' : 'jab';
+          const move = this.meleeMove(f, i, thrust);
           f.anim = move;
           f.at = 0;
           yield MR.HIT[move];
-          A().sfx('slash');
-          this.fx.crescent(tgt.cx - d * 6, tgt.cy, { r: 18, angle: 0.05, span: 1.8, scheme: sc, flat: 0.5 });
+          A().sfx('slash', 1 + i * 0.05);
+          if (move === 'thrust') {
+            this.fx.thrust(tgt.cx - d * 8, tgt.cy, { color: this.elemColor(f, ab), dir: d, len: 44 });
+            this.fx.speedLines(tgt.cx, tgt.cy, { dir: d, n: 8, h: 16 });
+          } else if (move === 'slashA' || move === 'slashB') {
+            this.fx.crescent(tgt.cx, tgt.cy, { r: 22 + (ab.power || 1) * 2, angle: move === 'slashA' ? 0.6 : -0.7, span: 2.6, dir: move === 'slashA' ? 1 : -1, scheme: sc, flat: 0.75, tilt: move === 'slashA' ? 0.3 : -0.3 });
+          } else this.fx.crescent(tgt.cx - d * 6, tgt.cy, { r: 18, angle: 0.05, span: 1.8, scheme: sc, flat: 0.5 });
+          this.hitFx(tgt, ab, f);
+          this.strike(f, tgt, ab, 1 / hits);
+          const rest = MR.seqDur(move) - MR.HIT[move];
+          yield i === hits - 1 ? rest : Math.min(rest, 0.1);
+          continue;
         } else if (thrust) {
           f.weaponRot = d * 1.45;
           yield* GS.tween(f, { offX: -4 * d }, 0.06);
@@ -827,7 +880,7 @@
         f.flip = !f.flip;
         f.weaponRot = (i % 2 ? -2 : 2) * d;
         if (f.rig) {
-          f.anim = i % 2 ? 'kick' : 'cross';
+          f.anim = this.weaponOf(f) ? (i % 2 ? 'slashB' : 'slashA') : i % 2 ? 'kick' : 'cross';
           f.at = MR.HIT[f.anim] * 0.8;
         }
         A().sfx('slash', 0.9 + Math.random() * 0.3);
@@ -849,8 +902,10 @@
     *animRanged(f, ab, targets) {
       const d = this.dirOf(f);
       if (f.rig) {
-        f.anim = 'cast';
+        const bow = this.weaponOf(f) === 'bow';
+        f.anim = bow ? 'shoot' : 'cast';
         f.at = 0;
+        yield bow ? MR.HIT.shoot : 0.12;
       }
       yield* GS.tween(f, { offX: -5 * d }, 0.1);
       const hits = ab.hits || 1;
@@ -904,6 +959,10 @@
             );
           }
           A().sfx('shoot');
+          if (f.rig && this.weaponOf(f) === 'bow' && hits <= 4 && i < hits - 1) {
+            f.anim = 'shoot';
+            f.at = MR.HIT.shoot - 0.04;
+          }
           yield hits > 4 ? 0.06 : 0.12;
         }
         yield tasks;
@@ -1200,11 +1259,12 @@
       this.handleMenu();
       this.co.update(wdt);
       this.fx.update(wdt);
+      this.gore.update(wdt);
       for (const f of this.fighters) {
         f.flash = Math.max(0, f.flash - wdt * 4);
         f.kx = (f.kx || 0) * Math.pow(0.0001, wdt);
         if (Math.abs(f.kx) < 0.3) f.kx = 0;
-        if (f.rig && this.mode === 'battle') f.at += wdt;
+        if (f.rig && (this.mode === 'battle' || !f.isHero)) f.at += wdt;
         else if (!f.isHero) f.at = (f.at || 0) + wdt;
         const target = f.hp / f.maxHp;
         f.hpGhost = f.hpGhost > target ? Math.max(target, f.hpGhost - wdt * 0.5) : target;
@@ -1214,7 +1274,7 @@
           for (const p of f.trail) p.a -= wdt * 3;
           f.trail = f.trail.filter((p) => p.a > 0);
         }
-        if (f.aura && Math.random() < wdt * 30) this.fx.flame(f.x + U.rand(-14, 14), f.y, { scheme: 'blood', n: 2, speed: 60, w: 8 });
+        if (f.aura && f.alive && Math.random() < wdt * 30) this.fx.flame(f.x + U.rand(-14, 14), f.y, { scheme: 'blood', n: 2, speed: 60, w: 8 });
       }
       this.cam.shake = Math.max(0, this.cam.shake - wdt * 18);
       this.screenFlash = Math.max(0, this.screenFlash - wdt * 2.5);
@@ -1448,7 +1508,15 @@
     // ================================================================= rendu
     fighterImage(f) {
       if (f.rig) return f.art.frame(f.anim, f.at).canvas;
-      return f.sprite.body;
+      const sp = f.sprite;
+      if (sp.frames && f.alive) return sp.frames[Math.floor((f.at || 0) * 5 + f.slot) % sp.frames.length];
+      return sp.body;
+    }
+    // Silhouette colorée (flash, aura) d'une image, en cache.
+    sil(img, color) {
+      let m = SIL.get(img);
+      if (!m) SIL.set(img, (m = {}));
+      return m[color] || (m[color] = GS.Pix.silhouette(img, color));
     }
 
     draw(ctx) {
@@ -1457,6 +1525,7 @@
       GS.BG.draw(this.area.bg, this.t, this.cam.x + shx, shy);
       ctx.save();
       ctx.translate(Math.round(-this.cam.x + shx), Math.round(shy));
+      this.gore.drawDecals(ctx);
       if (this.dim > 0) {
         ctx.save();
         ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -1468,7 +1537,7 @@
       for (const f of this.fighters) {
         if (f.ko >= 1 && !f.isHero) continue;
         ctx.globalAlpha = (1 - (f.isHero ? 0 : f.ko)) * 0.4;
-        R.ellipse(f.x + f.offX + (f.kx || 0), f.y + 1, Math.max(8, f.rig ? 15 : f.sprite.w * 0.3), 3, '#000000');
+        R.ellipse(f.x + f.offX + (f.kx || 0), f.y + 1, Math.max(8, f.rig ? 15 * (f.rscale || 1) : f.sprite.w * 0.3), 3, '#000000');
         ctx.globalAlpha = 1;
       }
       const act = this.active;
@@ -1484,10 +1553,12 @@
       }
       const order = this.fighters.slice().sort((a, b) => a.y - b.y);
       for (const f of order) this.drawFighter(ctx, f);
+      this.gore.draw(ctx);
       this.fx.draw(ctx, false);
       this.drawTargetCursor();
       this.fx.drawPops();
       ctx.restore();
+      ctx.drawImage(vignette(), 0, 0);
       if (this.screenFlash > 0) {
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
@@ -1534,15 +1605,17 @@
       if (f.rig) {
         const fr = f.art.frame(f.anim, f.at);
         const img = fr.canvas;
+        const rs = f.rscale || 1;
         if (f.trail && f.trail.length) {
           ctx.save();
           ctx.globalCompositeOperation = 'lighter';
           for (const p of f.trail) {
             ctx.globalAlpha = p.a * 0.5;
-            const g = f.art.silhouette(p.img, f.def.fxColor || '#60e8ff');
+            const g = f.art.silhouette(p.img, f.def.fxColor || (f.isHero ? '#60e8ff' : '#ff4060'));
             ctx.save();
             ctx.translate(Math.round(p.x), Math.round(p.y));
             if (f.dir < 0) ctx.scale(-1, 1);
+            if (rs !== 1) ctx.scale(rs, rs);
             ctx.drawImage(g, -fr.foot.x, -fr.foot.y);
             ctx.restore();
           }
@@ -1555,6 +1628,7 @@
           ctx.globalAlpha = 1 - f.ko * 0.4;
         }
         if (f.dir < 0 || f.flip) ctx.scale(-1, 1);
+        if (rs !== 1) ctx.scale(rs, rs);
         if (f.aura || f.charging) {
           const red = f.art.silhouette(img, '#ff2040');
           ctx.save();
@@ -1580,8 +1654,9 @@
           ctx.restore();
         }
       } else {
+        const img = this.fighterImage(f);
         if (f.trail && f.trail.length) {
-          const ghost = sp.ghost || (sp.ghost = GS.Pix.silhouette(sp.body, f.isHero ? '#60e8ff' : '#ff6080'));
+          const ghost = this.sil(sp.body, f.isHero ? '#60e8ff' : '#ff6080');
           ctx.save();
           ctx.globalCompositeOperation = 'lighter';
           for (const p of f.trail) {
@@ -1606,7 +1681,7 @@
         const ox = -sp.foot.x;
         const oy = -sp.foot.y;
         if (f.charging) {
-          const red = sp.red || (sp.red = GS.Pix.silhouette(sp.body, '#ff2040'));
+          const red = this.sil(img, '#ff2040');
           ctx.save();
           ctx.globalCompositeOperation = 'lighter';
           ctx.globalAlpha = 0.4 + Math.sin(this.t * 10) * 0.25;
@@ -1617,16 +1692,15 @@
         if (sp.humanoid || f.isHero) {
           const sc = sp.scale || 1;
           const split = 15 * sc;
-          ctx.drawImage(sp.body, 0, 0, sp.w, split, ox, oy + breathe * sc, sp.w, split);
-          ctx.drawImage(sp.body, 0, split, sp.w, sp.h - split, ox, oy + split, sp.w, sp.h - split);
-        } else if (f.alive && !f.fly) {
-          ctx.drawImage(sp.body, ox, oy + breathe, sp.w, sp.h - breathe);
-        } else ctx.drawImage(sp.body, ox, oy);
+          ctx.drawImage(img, 0, 0, sp.w, split, ox, oy + breathe * sc, sp.w, split);
+          ctx.drawImage(img, 0, split, sp.w, sp.h - split, ox, oy + split, sp.w, sp.h - split);
+        } else if (f.alive && !f.fly && !sp.frames) {
+          ctx.drawImage(img, ox, oy + breathe, sp.w, sp.h - breathe);
+        } else ctx.drawImage(img, ox, oy);
         if (f.flash > 0) {
-          const wimg = f.flashColor === '#ffffff' ? sp.white : sp['f' + f.flashColor] || (sp['f' + f.flashColor] = GS.Pix.silhouette(sp.body, f.flashColor));
           ctx.save();
           ctx.globalAlpha = Math.min(1, f.flash);
-          ctx.drawImage(wimg, ox, oy);
+          ctx.drawImage(this.sil(img, f.flashColor || '#ffffff'), ox, oy);
           ctx.restore();
         }
         if (sp.weapon) {
@@ -1746,7 +1820,10 @@
         const y = y0 + 2 + (i === 0 ? 0 : 1);
         R.rect(x, y, s, s, f.isHero ? '#0a2a48' : '#3a0a18');
         if (f.isHero) GS.Art.portrait(f.def, x + 1, y + 1, s - 2, s - 2, f.rig ? 0.5 : 1, {});
-        else clipDraw(f.sprite.body, x + 1, y + 1, s - 2, s - 2, f.sprite.w / 2, f.sprite.h * 0.35);
+        else if (f.rig) {
+          const fr = f.art.frame('idle', 0);
+          clipDraw(fr.canvas, x + 1, y + 1, s - 2, s - 2, fr.head.x, fr.head.y + 2, true);
+        } else clipDraw(f.sprite.body, x + 1, y + 1, s - 2, s - 2, f.sprite.w / 2, f.sprite.h * 0.35);
         R.frame(x, y, s, s, i === 0 ? '#ffffff' : f.isHero ? '#3ea8ff' : '#ff5060');
       });
     }
@@ -1991,15 +2068,37 @@
     });
   }
 
-  function clipDraw(img, x, y, w, h, fx, fy) {
+  function clipDraw(img, x, y, w, h, fx, fy, mirror) {
     const ctx = GS.ctx;
     ctx.save();
     ctx.beginPath();
     ctx.rect(x, y, w, h);
     ctx.clip();
-    const k = img.width > 60 ? 0.5 : 1;
-    ctx.drawImage(img, Math.round(x + w / 2 - fx * k), Math.round(y + h / 2 - fy * k), img.width * k, img.height * k);
+    const k = img.width > 60 && !mirror ? 0.5 : 1;
+    if (mirror) {
+      ctx.translate(x + w / 2, y + h / 2);
+      ctx.scale(-1, 1);
+      ctx.drawImage(img, Math.round(-fx), Math.round(-fy));
+    } else ctx.drawImage(img, Math.round(x + w / 2 - fx * k), Math.round(y + h / 2 - fy * k), img.width * k, img.height * k);
     ctx.restore();
+  }
+
+  // Silhouettes en cache par image.
+  const SIL = new WeakMap();
+
+  // Vignette sombre (bords de l'écran assombris, ambiance dark).
+  let VIG = null;
+  function vignette() {
+    if (VIG) return VIG;
+    VIG = GS.Pix.makeCanvas(GS.W, GS.H);
+    const c = VIG.getContext('2d');
+    const g = c.createRadialGradient(GS.W / 2, GS.H * 0.55, GS.H * 0.3, GS.W / 2, GS.H * 0.55, GS.W * 0.62);
+    g.addColorStop(0, 'rgba(4,2,8,0)');
+    g.addColorStop(0.6, 'rgba(4,2,8,0.25)');
+    g.addColorStop(1, 'rgba(2,0,4,0.7)');
+    c.fillStyle = g;
+    c.fillRect(0, 0, GS.W, GS.H);
+    return VIG;
   }
 
   GS.BattleScene = BattleScene;

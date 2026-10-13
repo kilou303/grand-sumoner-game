@@ -16,7 +16,7 @@
     frame(anim = 'idle', t = 0) {
       if (this.rig) {
         const f = typeof anim === 'string' ? this.rig.anim(anim, t) : this.rig.frame(anim);
-        return { canvas: f.canvas, foot: GS.ModRig.FOOT, hand: f.hand, head: f.head, rig: true };
+        return { canvas: f.canvas, foot: GS.ModRig.FOOT, hand: f.hand, head: f.head, shF: f.shF, shB: f.shB, neck: f.neck, hip: f.hip, rig: true };
       }
       return { canvas: this.sp.body, foot: this.sp.foot, hand: this.sp.hand, weapon: this.sp.weapon, sp: this.sp };
     }
@@ -45,6 +45,7 @@
   }
 
   Art.char = (def) => chars[def.id] || (chars[def.id] = new CharArt(def));
+  Art.CharArt = CharArt;
 
   // Dessine un héros, pieds en (x, y). o : scale, anim, t, pose, flip, alpha, silhouette, flash
   Art.drawUnit = (def, x, y, o = {}) => {

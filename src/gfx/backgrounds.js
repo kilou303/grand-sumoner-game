@@ -355,6 +355,247 @@
     return { layers: [[sky, 0.04], [far, 0.12], [mid, 0.45], [ground, 1]], stars: true, fireflies: true };
   };
 
+  // ------------------------------------------------------------ décors urbains sombres
+  // Ruelles nocturnes sous la pluie (lampadaires, immeubles, bitume mouillé, grille).
+  DEFS.street = (rng) => {
+    const sky = layer();
+    let c = sky.getContext('2d');
+    ditherGrad(c, 0, 0, TW, 160, ['#04040a', '#080814', '#10102a', '#1c1838', '#2c2240']);
+    const far = layer();
+    c = far.getContext('2d');
+    for (let x = 0; x < TW; ) {
+      const w = 26 + Math.floor(rng() * 40);
+      const h = 50 + Math.floor(rng() * 70);
+      px(c, x, 150 - h, '#0c0c1a', w, h + 10);
+      for (let wy = 150 - h + 6; wy < 146; wy += 6)
+        for (let wx = x + 3; wx < x + w - 3; wx += 5) if (rng() < 0.18) px(c, wx, wy, rng() < 0.7 ? '#c8a050' : '#5070b0', 2, 2);
+      x += w + Math.floor(rng() * 6);
+    }
+    const mid = layer();
+    c = mid.getContext('2d');
+    for (let x = 0; x < TW; ) {
+      const w = 60 + Math.floor(rng() * 50);
+      const h = 70 + Math.floor(rng() * 40);
+      const top = G - h;
+      px(c, x, top, '#16141e', w, h);
+      px(c, x, top, '#22202c', w, 2);
+      for (let wy = top + 8; wy < G - 30; wy += 12)
+        for (let wx = x + 6; wx < x + w - 8; wx += 14) {
+          px(c, wx, wy, '#0a0a10', 8, 7);
+          if (rng() < 0.25) px(c, wx + 1, wy + 1, rng() < 0.5 ? '#806030' : '#304060', 6, 5);
+        }
+      // vitrine / rideau métallique
+      px(c, x + 8, G - 26, '#24222c', w - 16, 24);
+      for (let ly = G - 24; ly < G - 2; ly += 2) px(c, x + 8, ly, '#1a1820', w - 16, 1);
+      if (rng() < 0.6) {
+        const nc = U.choice(['#ff3060', '#30e0ff', '#c040ff', '#ff8020']);
+        px(c, x + 12, G - 34, nc, Math.min(30, w - 24), 3);
+        c.globalAlpha = 0.25;
+        px(c, x + 8, G - 38, nc, Math.min(38, w - 16), 11);
+        c.globalAlpha = 1;
+      }
+      x += w + 4;
+    }
+    const ground = layer();
+    c = ground.getContext('2d');
+    ditherGrad(c, 0, G, TW, GS.H - G, ['#1a1822', '#121018', '#0a0a10']);
+    px(c, 0, G, '#2a2834', TW, 3);
+    px(c, 0, G + 3, '#0a0a10', TW, 1);
+    for (let i = 0; i < 900; i++) px(c, rng() * TW, G + 4 + rng() * (GS.H - G), rng() < 0.5 ? '#22202c' : '#0c0a12', 2, 1);
+    // lampadaires et reflets mouillés
+    for (let lx = 60; lx < TW; lx += 240) {
+      px(c, lx, G - 90, '#2a2a36', 3, 92);
+      px(c, lx - 10, G - 92, '#2a2a36', 14, 3);
+      px(c, lx - 12, G - 90, '#ffe8a0', 6, 3);
+      c.globalAlpha = 0.07;
+      for (let k = 0; k < 8; k++) {
+        const w = 10 + k * 7;
+        px(c, lx - 9 - w / 2, G - 88 + k * 12, '#ffe8a0', w, 12);
+      }
+      c.globalAlpha = 0.25;
+      for (let ry = G + 6; ry < GS.H; ry += 3) px(c, lx - 12 + (rng() - 0.5) * 6, ry, '#ffe8a0', 4 + rng() * 6, 1);
+      c.globalAlpha = 1;
+    }
+    for (let i = 0; i < 40; i++) {
+      c.globalAlpha = 0.2;
+      px(c, rng() * TW, G + 10 + rng() * 90, U.choice(['#ff3060', '#30e0ff', '#5070b0']), 6 + rng() * 14, 1);
+      c.globalAlpha = 1;
+    }
+    const fore = layer();
+    c = fore.getContext('2d');
+    // grille / barrière au premier plan
+    px(c, 0, GS.H - 28, '#08080e', TW, 2);
+    for (let x = 0; x < TW; x += 9) px(c, x, GS.H - 30, '#08080e', 2, 30);
+    return { layers: [[sky, 0.04], [far, 0.12], [mid, 0.35], [ground, 1], [fore, 1.3]], rain: true, stars: false };
+  };
+
+  // Lycée abandonné : couloir de nuit, fenêtres sous la lune, casiers, néons qui grésillent.
+  DEFS.school = (rng) => {
+    const sky = layer();
+    let c = sky.getContext('2d');
+    ditherGrad(c, 0, 0, TW, GS.H, ['#0c1014', '#141c20', '#1a2226']);
+    // mur du fond
+    px(c, 0, 20, '#1e2a28', TW, G - 20);
+    px(c, 0, 20, '#283632', TW, 2);
+    px(c, 0, G - 40, '#162020', TW, 40);
+    px(c, 0, G - 40, '#2c3a36', TW, 2);
+    const far = layer();
+    c = far.getContext('2d');
+    for (let x = 30; x < TW; x += 120) {
+      // fenêtres éclairées par la lune
+      px(c, x, 36, '#0a1018', 70, 60);
+      px(c, x + 3, 39, '#2a3a50', 30, 54);
+      px(c, x + 37, 39, '#2a3a50', 30, 54);
+      c.globalAlpha = 0.35;
+      for (let k = 0; k < 20; k++) px(c, x + 4 + k, 40 + k * 2, '#8090b0', 3, 1);
+      c.globalAlpha = 1;
+      if (rng() < 0.4) px(c, x + 10, 50, '#0a1018', 12, 2);
+    }
+    const mid = layer();
+    c = mid.getContext('2d');
+    for (let x = 0; x < TW; x += 24) {
+      px(c, x, G - 38, '#2a3436', 22, 36);
+      px(c, x + 1, G - 37, '#36424a', 20, 1);
+      px(c, x + 17, G - 22, '#5a6a6a', 2, 4);
+      for (let v = 0; v < 3; v++) px(c, x + 4, G - 34 + v * 3, '#1a2024', 12, 1);
+      if (rng() < 0.15) px(c, x + 2, G - 20 + rng() * 10, '#5a1018', 4 + rng() * 10, 2);
+    }
+    // néons au plafond
+    for (let x = 80; x < TW; x += 200) {
+      px(c, x, 22, '#dfe8e0', 40, 3);
+      c.globalAlpha = 0.06;
+      for (let k = 0; k < 8; k++) px(c, x - k * 6, 25 + k * 16, '#dfe8e0', 40 + k * 12, 16);
+      c.globalAlpha = 1;
+    }
+    const ground = layer();
+    c = ground.getContext('2d');
+    for (let y = G; y < GS.H; y += 8)
+      for (let x = (y / 8) % 2 ? 0 : 8; x < TW; x += 16) {
+        px(c, x, y, '#2a2e30', 15, 7);
+        px(c, x, y, '#363c3e', 15, 1);
+      }
+    for (let i = 0; i < 12; i++) {
+      c.globalAlpha = 0.5;
+      const x = rng() * TW;
+      const y = G + 10 + rng() * 80;
+      for (let k = 0; k < 14; k++) px(c, x + (rng() - 0.5) * 16, y + (rng() - 0.5) * 6, '#4a0810', 2, 1);
+      c.globalAlpha = 1;
+    }
+    return { layers: [[sky, 0.02], [far, 0.3], [mid, 0.7], [ground, 1]], flicker: true };
+  };
+
+  // Métro maudit : tunnel carrelé, piliers, rails, lumières rouges.
+  DEFS.subway = (rng) => {
+    const sky = layer();
+    let c = sky.getContext('2d');
+    ditherGrad(c, 0, 0, TW, GS.H, ['#06060a', '#0e0c14', '#16121c']);
+    for (let y = 30; y < G - 10; y += 6)
+      for (let x = (y / 6) % 2 ? 0 : 5; x < TW; x += 10) {
+        px(c, x, y, '#1c1a22', 9, 5);
+        px(c, x, y, '#24222c', 9, 1);
+      }
+    px(c, 0, 70, '#5a1020', TW, 4);
+    const far = layer();
+    c = far.getContext('2d');
+    for (let x = 0; x < TW; x += 64) {
+      px(c, x, 0, '#0c0a10', 18, G + 4);
+      px(c, x + 3, 0, '#1a1820', 3, G + 4);
+      px(c, x + 6, 40, '#ff2030', 6, 3);
+      c.globalAlpha = 0.12;
+      px(c, x - 6, 30, '#ff2030', 30, 24);
+      c.globalAlpha = 1;
+    }
+    for (let i = 0; i < 10; i++) {
+      const x = rng() * TW;
+      c.globalAlpha = 0.5;
+      for (let k = 0; k < 20; k++) px(c, x + k * 2, 100 + Math.sin(k) * 4 + rng() * 3, U.choice(['#8a2040', '#2a6a8a', '#8a8a2a']), 2, 2);
+      c.globalAlpha = 1;
+    }
+    const mid = layer();
+    c = mid.getContext('2d');
+    px(c, 0, G - 6, '#2a2a30', TW, 6);
+    px(c, 0, G - 6, '#e8c040', TW, 1);
+    const ground = layer();
+    c = ground.getContext('2d');
+    ditherGrad(c, 0, G, TW, GS.H - G, ['#141218', '#0c0a10', '#06060a']);
+    for (const ry of [G + 30, G + 60]) {
+      px(c, 0, ry, '#4a4a54', TW, 2);
+      px(c, 0, ry + 2, '#1a1a20', TW, 1);
+    }
+    for (let x = 0; x < TW; x += 14) px(c, x, G + 26, '#2a1e18', 8, 40);
+    return { layers: [[sky, 0.04], [far, 0.4], [mid, 0.8], [ground, 1]], flicker: true };
+  };
+
+  // Sanctuaire écarlate : lune rouge, torii, lanternes de pierre, pétales.
+  DEFS.shrine = (rng) => {
+    const sky = layer();
+    let c = sky.getContext('2d');
+    ditherGrad(c, 0, 0, TW, 170, ['#0a0206', '#1a0408', '#3a0810', '#5a1418', '#2a0a10']);
+    blob(c, 640, 62, 26, '#d02020');
+    blob(c, 640, 62, 22, '#f04030');
+    c.globalAlpha = 0.15;
+    blob(c, 640, 62, 44, '#ff3030');
+    c.globalAlpha = 1;
+    const far = layer();
+    c = far.getContext('2d');
+    fillRidge(c, ridge(rng, 128, 34), 170, '#120206', null);
+    for (let x = 0; x < TW; x += 9) {
+      const h = 26 + rng() * 22;
+      wrap(x, 12, (xx) => pine(c, xx, 156, h, '#0a0204'));
+    }
+    const mid = layer();
+    c = mid.getContext('2d');
+    for (let x = 100; x < TW; x += 320) {
+      // torii
+      px(c, x, G - 80, '#8a1010', 6, 82);
+      px(c, x + 54, G - 80, '#8a1010', 6, 82);
+      px(c, x - 10, G - 86, '#a01818', 80, 6);
+      px(c, x - 14, G - 90, '#1a0406', 88, 4);
+      px(c, x - 4, G - 68, '#8a1010', 68, 4);
+      // lanternes
+      for (const lx of [x - 60, x + 120]) {
+        px(c, lx, G - 30, '#3a3434', 8, 30);
+        px(c, lx - 4, G - 38, '#4a4444', 16, 8);
+        px(c, lx + 1, G - 36, '#ff9040', 6, 4);
+      }
+    }
+    const ground = layer();
+    c = ground.getContext('2d');
+    ditherGrad(c, 0, G, TW, GS.H - G, ['#2a1416', '#1a0c0e', '#0e0608']);
+    for (let x = 0; x < TW; x += 22) {
+      px(c, x, G + 30, '#3a2a2a', 18, 8);
+      px(c, x, G + 30, '#4a3838', 18, 1);
+    }
+    for (let i = 0; i < 120; i++) px(c, rng() * TW, G + rng() * (GS.H - G), rng() < 0.5 ? '#c02838' : '#7a1020', 2, 1);
+    return { layers: [[sky, 0.04], [far, 0.15], [mid, 0.45], [ground, 1]], petals: true };
+  };
+
+  // Étalonnage sombre : désature et assombrit une couche (ambiance "dark").
+  const grade = (cv, o) => {
+    const ctx = cv.getContext('2d');
+    const img = ctx.getImageData(0, 0, cv.width, cv.height);
+    const d = img.data;
+    const t = U.hexToRgb(o.tint || '#1a0814');
+    for (let i = 0; i < d.length; i += 4) {
+      if (!d[i + 3]) continue;
+      const L = d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11;
+      for (let k = 0; k < 3; k++) {
+        let v = U.lerp(d[i + k], L, o.desat);
+        v = v * (1 - o.dark);
+        v = U.lerp(v, t[k], o.tintAmt);
+        d[i + k] = v;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+  };
+  const GRADES = {
+    plains: { desat: 0.45, dark: 0.45, tint: '#1a0a20', tintAmt: 0.12 },
+    forest: { desat: 0.35, dark: 0.4, tint: '#14060e', tintAmt: 0.12 },
+    volcano: { desat: 0.2, dark: 0.25, tint: '#1a0404', tintAmt: 0.1 },
+    castle: { desat: 0.25, dark: 0.25, tint: '#0a0614', tintAmt: 0.1 },
+    town: { desat: 0.35, dark: 0.35, tint: '#140814', tintAmt: 0.12 },
+  };
+
   // ------------------------------------------------------------ instance
   const cache = {};
   BG.get = (name) => {
@@ -362,6 +603,7 @@
     let h = 7;
     for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
     const def = DEFS[name](U.seeded(h));
+    if (GRADES[name]) for (const [cv] of def.layers) grade(cv, GRADES[name]);
     const r2 = U.seeded(99);
     def.starList = [];
     if (def.stars) for (let i = 0; i < 220; i++) def.starList.push([r2() * TW, r2() * 120, r2() * 6, r2() < 0.15 ? 2 : 1]);
@@ -406,6 +648,32 @@
         }
       }
     });
+    if (d.rain) {
+      ctx.save();
+      ctx.globalAlpha = 0.35;
+      for (const m of d.motes) {
+        for (let r = 0; r < 3; r++) {
+          const y = (((m[1] + r * 90 + t * 320 * m[3]) % GS.H) + GS.H) % GS.H;
+          const x = (((m[0] + r * 160 - y * 0.25 - camX * 0.9) % GS.W) + GS.W) % GS.W;
+          px(ctx, x, y, '#8a9ab8', 1, 4);
+        }
+      }
+      ctx.restore();
+    }
+    if (d.flicker && Math.sin(t * 23) > 0.93) {
+      ctx.save();
+      ctx.globalAlpha = 0.18;
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, GS.W, GS.H);
+      ctx.restore();
+    }
+    if (d.petals) {
+      for (const m of d.motes) {
+        const y = (((m[1] + t * 22 * m[3]) % GS.H) + GS.H) % GS.H;
+        const x = (((m[0] + Math.sin(t + m[2]) * 20 - t * 14 - camX * 0.7) % GS.W) + GS.W) % GS.W;
+        px(ctx, x, y, Math.sin(t * 2 + m[2]) > 0 ? '#d02838' : '#801020', 2, 1);
+      }
+    }
     if (d.embers) {
       for (const m of d.motes) {
         const y = (((m[1] - t * 18 * m[3]) % GS.H) + GS.H) % GS.H;
