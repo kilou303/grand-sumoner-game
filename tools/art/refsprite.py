@@ -8,9 +8,12 @@ que Djegui, voir src/gfx/modrig.js).
 
 Chaque script tools/art/build_<héros>.py fournit sa configuration à `build(cfg)` :
   name, src, out, var    nom du héros, image source, fichier JS écrit, variable GS.<var>
-  pitch, off, floor      grille de l'image agrandie (pas, décalage x/y), 1re ligne du sol
+  pitch, off, floor      grille de l'image agrandie (pas, ou (pas x, pas y) ; décalage x/y),
+                         1re ligne du sol (facultatif)
+  bg                     'white' (défaut) ou 'black' : couleur du fond de l'image
   face, face_col         retouches à la main : {ligne: (x0, 'pixels')}, {lettre: couleur}
   cut, joints, piv       découpe en pièces, articulations et pivots (image réduite)
+  combine, alias, rotate pièces composées, reprises ou tournées (voir build_parts)
   erase                  pixels à effacer après réduction : {ligne: R((x0, x1), ...)}
   keep_edge              zones où le contour sombre extérieur et les pixels isolés sont gardés
                          (mèches de cheveux noirs) : {ligne: R(...)}
@@ -48,25 +51,44 @@ def pal_lum(h):
 
 
 # ------------------------------------------------------------------ grille d'origine
-def native(A, pitch, off):
+def native(A, pitch, off, fill=255.0):
+    """pitch : pas commun, ou (pas x, pas y) quand l'image a été agrandie différemment."""
     H, W = A.shape[:2]
-    xs = np.arange(off[0] - pitch, W, pitch)
-    ys = np.arange(off[1] - pitch, H, pitch)
-    out = np.full((len(ys) - 1, len(xs) - 1, 3), 255.0)
+    px, py = pitch if isinstance(pitch, (tuple, list)) else (pitch, pitch)
+    xs = np.arange(off[0] - px, W, px)
+    ys = np.arange(off[1] - py, H, py)
+    out = np.full((len(ys) - 1, len(xs) - 1, 3), fill)
     for j in range(len(ys) - 1):
         for i in range(len(xs) - 1):
-            a, b = max(0, int(ys[j] + pitch * 0.25)), min(H, int(ys[j + 1] - pitch * 0.25))
-            c, d = max(0, int(xs[i] + pitch * 0.25)), min(W, int(xs[i + 1] - pitch * 0.25))
+            a, b = max(0, int(ys[j] + py * 0.25)), min(H, int(ys[j + 1] - py * 0.25))
+            c, d = max(0, int(xs[i] + px * 0.25)), min(W, int(xs[i + 1] - px * 0.25))
             if b > a and d > c:
                 out[j, i] = np.median(A[a:b, c:d].reshape(-1, 3), axis=0)
     return out
 
 
 # ------------------------------------------------------------------ détourage
-def segment(nat, floor, hole_min=225, hole_size=3):
+def close(m):
+    """Fermeture (dilatation puis érosion d'un pixel) : rebouche les fentes laissées par les
+    traits noirs intérieurs reliés au contour, emportés avec un fond noir."""
+    def dil(a):
+        b = a.copy()
+        b[1:] |= a[:-1]
+        b[:-1] |= a[1:]
+        b[:, 1:] |= a[:, :-1]
+        b[:, :-1] |= a[:, 1:]
+        return b
+    return ~dil(~dil(m))
+
+
+def segment(nat, floor, hole_min=225, hole_size=3, bg='white'):
     h, w = nat.shape[:2]
     L = lum(nat)
-    ok = nat.min(2) > 215  # fond blanc
+    if bg == 'black':
+        # fond noir : le contour noir part avec lui (le jeu le redessine), on referme ensuite
+        ok = nat.max(2) < 40
+    else:
+        ok = nat.min(2) > 215  # fond blanc
     ok[floor:] |= L[floor:] > 40  # sol : tout sauf le contour noir des bottes
     seen = np.zeros((h, w), bool)
     q = deque((y, x) for y in range(h) for x in range(w) if (y in (0, h - 1) or x in (0, w - 1)) and ok[y, x])
@@ -80,6 +102,8 @@ def segment(nat, floor, hole_min=225, hole_size=3):
                 seen[ny, nx] = True
                 q.append((ny, nx))
     m = ~seen
+    if bg == 'black':
+        m = close(m)
     # trous de fond enfermés (entre le bras et le torse) : zones blanches de plus de `hole_size`
     # pixels (hole_min > 255 : aucun, quand le personnage porte du blanc)
     white = (nat.min(2) > hole_min) & m
@@ -174,7 +198,9 @@ def isolated(g, passes=2):
 
 def build_frame(cfg):
     A = np.asarray(Image.open(cfg['src']).convert('RGB')).astype(float)
-    nat, m = segment(native(A, cfg['pitch'], cfg['off']), cfg['floor'], cfg.get('hole_min', 225), cfg.get('hole_size', 3))
+    bg = cfg.get('bg', 'white')
+    nat = native(A, cfg['pitch'], cfg['off'], 0.0 if bg == 'black' else 255.0)
+    nat, m = segment(nat, cfg.get('floor', len(nat)), cfg.get('hole_min', 256 if bg == 'black' else 225), cfg.get('hole_size', 3), bg)
     pix = nat[m]
     ncol = cfg.get('ncol', 22)
     thr = cfg.get('outline_lum', 30)
@@ -285,9 +311,14 @@ def retouch(rows, pal, face, face_col):
 
 
 # ------------------------------------------------------------------ pièces du squelette
-def build_parts(rows, cut, piv, names, nocrop):
+def build_parts(rows, cut, piv, names, nocrop, combine=None, alias=None, rotate=None):
     """Chaque pixel est attribué à une pièce selon des plages (ligne -> [x0, x1]) ;
-    la première pièce qui couvre un pixel le prend."""
+    la première pièce qui couvre un pixel le prend.
+    combine : {pièce: [clés]} pièce faite de plusieurs découpes (bras « en poche » gardés
+              dans leur pose d'origine : pocketF, pocketB, posés sur le torse)
+    alias   : {pièce: autre pièce} reprend une pièce (bras caché sur l'image)
+    rotate  : {pièce: n} tourne la pièce de n quarts de tour horaires (le poing doit pointer
+              vers le bas, dans l'axe d'un avant-bras qui pend)"""
     h, w = len(rows), len(rows[0])
     owner = [[None] * w for _ in range(h)]
     for key, spans in cut:
@@ -296,18 +327,27 @@ def build_parts(rows, cut, piv, names, nocrop):
                 for x in range(x0, min(x1, w - 1) + 1):
                     if y < h and owner[y][x] is None and rows[y][x] != '.':
                         owner[y][x] = key
+    groups = [(name, {key}) for key, name in names.items()] + [(n, set(ks)) for n, ks in (combine or {}).items()]
     parts = {}
-    for key, name in names.items():
-        cells = [(y, x) for y in range(h) for x in range(w) if owner[y][x] == key]
+    for name, keys in groups:
+        cells = [(y, x) for y in range(h) for x in range(w) if owner[y][x] in keys]
         if not cells:
             raise SystemExit('pièce vide : ' + name)
         ys = [c[0] for c in cells]
         xs = [c[1] for c in cells]
         y0, y1 = min(ys), max(ys)
         x0, x1 = (0, w - 1) if name in nocrop else (min(xs), max(xs))
-        t = [''.join(rows[y][x] if owner[y][x] == key else '.' for x in range(x0, x1 + 1)) for y in range(y0, y1 + 1)]
+        t = [''.join(rows[y][x] if owner[y][x] in keys else '.' for x in range(x0, x1 + 1)) for y in range(y0, y1 + 1)]
         pv, en = piv[name]
-        parts[name] = {'pivot': [pv[0] - x0, pv[1] - y0], 'end': [en[0] - x0, en[1] - y0], 't': t}
+        pv, en = [pv[0] - x0, pv[1] - y0], [en[0] - x0, en[1] - y0]
+        for _ in range((rotate or {}).get(name, 0) % 4):
+            # quart de tour horaire : la cellule (x, y) va en (hauteur - 1 - y, x)
+            th = len(t)
+            t = [''.join(t[th - 1 - y][x] for y in range(th)) for x in range(len(t[0]))]
+            pv, en = [th - 1 - pv[1], pv[0]], [th - 1 - en[1], en[0]]
+        parts[name] = {'pivot': pv, 'end': en, 't': t}
+    for name, src in (alias or {}).items():
+        parts[name] = parts[src]
     left = [(y, x) for y in range(h) for x in range(w) if rows[y][x] != '.' and owner[y][x] is None]
     return parts, left
 
@@ -322,7 +362,8 @@ def build(cfg):
     if not cfg.get('cut'):
         print('\n'.join('%2d %s' % (y, r) for y, r in enumerate(rows)))
         return
-    parts, left = build_parts(rows, cfg['cut'], cfg['piv'], cfg.get('names', NAMES), cfg.get('nocrop', {'torso'}))
+    parts, left = build_parts(rows, cfg['cut'], cfg['piv'], cfg.get('names', NAMES), cfg.get('nocrop', {'torso'}),
+                              cfg.get('combine'), cfg.get('alias'), cfg.get('rotate'))
     rel = os.path.relpath(cfg['src'], ROOT)
     script = 'tools/art/build_%s.py' % cfg['name'].lower()
     lines = [

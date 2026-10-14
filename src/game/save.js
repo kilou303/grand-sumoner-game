@@ -37,7 +37,7 @@
       d = S.fresh();
       GS.data = d;
       // Héros de départ.
-      for (const id of ['djegui', 'azura', 'vesper', 'sakura', 'toran', 'lina', 'pip']) S.addUnit(id);
+      for (const id of ['valka', 'djegui', 'azura', 'vesper', 'sakura', 'toran', 'lina', 'pip']) S.addUnit(id);
       d.team = d.units.slice(0, 3).map((u) => u.uid);
       S.save();
     }
@@ -50,7 +50,11 @@
     if (!GS.data.team.length && GS.data.units.length) GS.data.team = [GS.data.units[0].uid];
     // Héros de départ ajoutés après la création de la sauvegarde.
     const missing = GS.UNITS.filter((u) => u.starter && !S.ownedById(u.id));
-    for (const u of missing) S.addUnit(u.id);
+    for (const u of missing) {
+      const { unit } = S.addUnit(u.id);
+      // une cheffe d'équipe qui arrive prend l'emplacement CHEF (l'équipe reste à 3)
+      if (u.chef) GS.data.team = [unit.uid].concat(GS.data.team).slice(0, 3);
+    }
     // Équipement de départ (nouvelle partie ou sauvegarde d'avant l'équipement), porté par le chef.
     if (kit) {
       const lead = S.teamUnits()[0];

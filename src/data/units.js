@@ -92,6 +92,29 @@
       overlimit: { name: 'Tempête de Cerisiers', target: 'enemies', anim: 'magic', fx: 'quake', power: 5.2, hits: 5, effects: [e('atkUp', 3, 1, 'allies')], desc: "Un tourbillon de pétales et de coups frappe tous les ennemis + ATQ↑ équipe." },
     },
 
+    {
+      id: 'valka',
+      name: 'Valka',
+      title: 'Cheffe de Combat',
+      rarity: 5,
+      element: 'fire',
+      role: 'attaquant',
+      starter: true,
+      noGacha: true,
+      // cheffe d'équipe : prend l'emplacement CHEF quand elle rejoint une partie
+      chef: true,
+      lore: "Vétérane des arènes clandestines, elle mène l'équipe au combat. Épaulières à pointes, poings nus, et jamais un pas en arrière.",
+      rig: () => GS.Valka.rig(),
+      look: { hair: 'short', body: 'armor', weapon: 'none', colors: { hair: '#f6cd5d', main: '#28282c', second: '#7e625e', skin: '#f69f85', eye: '#3a8ad0' } },
+      attack: { hits: 3, anim: 'brawl', fx: 'punch' },
+      skills: [
+        { name: 'Ordre de Charge', mp: 35, target: 'allies', anim: 'support', fx: 'rage', effects: [e('atkUp', 3), e('spdUp', 2)], desc: "La cheffe donne l'assaut : ATQ↑ et VIT↑ pour toute l'équipe." },
+        { name: 'Poing de Fer', mp: 30, target: 'enemy', anim: 'brawl', fx: 'heavy', power: 2.3, hits: 3, effects: [e('defDown', 3, 0.6)], desc: 'Trois coups lourds, 60% de DÉF↓.' },
+      ],
+      special: { name: 'Charge de la Cheffe', target: 'enemy', anim: 'brawl', fx: 'fire', power: 3.9, hits: 5, crit: 0.2, desc: 'Cinq coups enflammés, uppercut final.' },
+      overlimit: { name: 'Cri de Guerre', target: 'enemies', anim: 'power', fx: 'void', power: 5.4, hits: 5, effects: [e('atkUp', 3, 1, 'allies')], desc: "Son cri embrase l'équipe : dégâts massifs sur tous les ennemis + ATQ↑ équipe." },
+    },
+
     // ============================================================ ★5
     {
       id: 'kaelen',

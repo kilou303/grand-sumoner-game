@@ -204,7 +204,9 @@
       const torsoStamp = (part) => stampTorso(tg, P[part].t, P[part].pivot[0] + 0.5, P[part].pivot[1] + 0.5, hip.x, hip.y, lean, sy, pose.sway || 0, 5, pose.hipLean);
       // bras avant derrière le torse (tous sauf Djegui) : sa poche passe sous le torse
       const under = sp.frontArm === 'under';
-      if (pocketB) torsoStamp('pocketB');
+      // bras arrière devant le torse (perso vu de l'autre trois-quarts, comme Valka)
+      const backOver = sp.backArm === 'front';
+      if (pocketB && !backOver) torsoStamp('pocketB');
       let pg = null;
       if (pocketF && under) {
         pg = Pix.grid(CW, CH);
@@ -212,6 +214,7 @@
       }
       const map = torsoStamp('torso');
       if (pocketF && !under) torsoStamp('pocketF');
+      if (pocketB && backOver) torsoStamp('pocketB');
       // liseré sombre là où le bras passe sous le bord du torse
       const seamUnder = (grid, cells) => {
         for (const id of cells) {
@@ -296,11 +299,11 @@
             if (front) handF = { x: hx, y: hy, ang: fa };
           }
         }
-        if (front || pose.swap || pose.backArm === 'front') innerOutline(g, cells, sp.outline);
+        if (front || pose.swap || pose.backArm === 'front' || sp.backArm === 'front') innerOutline(g, cells, sp.outline);
         return cells;
       };
 
-      const backBehind = !pose.swap && pose.backArm !== 'front';
+      const backBehind = !pose.swap && pose.backArm !== 'front' && sp.backArm !== 'front';
       if (backBehind) drawArm(pose.arms[0], false);
       drawLeg(pose.legs[0], false);
       drawLeg(pose.legs[1], true);
