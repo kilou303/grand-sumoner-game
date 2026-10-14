@@ -32,11 +32,12 @@ FACE_COL = {'a': '#2a1408', 'w': '#fefefc', 'i': '#3a8ad0', 'd': '#1a3a6a', 'u':
 # devant le torse, le bras avant (tendu en garde) part de derrière. Au repos, les deux bras
 # gardent leur pose de garde (pocketB, pocketF) ; ils ne s'articulent que pour frapper.
 # h tête, t torse (débardeur, épaulières, jupette à pointes), u/l/f bras arrière (épaulière et
-# biceps, avant-bras, poing), L/F avant-bras et poing avant (le biceps avant, caché derrière
+# biceps avec le creux de l'aisselle, sinon un éclat noir reste sur le torse quand le bras
+# part frapper, avant-bras, poing), L/F avant-bras et poing avant (le biceps avant, caché derrière
 # le torse, reprend celui de l'arrière), a/s jambe arrière, A/S jambe avant, O pied.
 CUT = [
     ('u', {12: R((7, 14)), 13: R((7, 14)), **{y: R((7, 15)) for y in range(14, 17)}, 17: R((7, 14)), 18: R((6, 13)),
-           19: R((5, 12)), 20: R((4, 11)), 21: R((3, 10)), 22: R((2, 9)), 23: R((2, 7))}),
+           19: R((5, 15)), 20: R((4, 15)), 21: R((3, 14)), 22: R((2, 11)), 23: R((2, 8))}),
     ('l', {24: R((2, 8)), 25: R((2, 8)), 26: R((3, 8)), 27: R((4, 8)), 28: R((6, 8))}),
     ('f', {y: R((9, 13)) for y in range(23, 30)}),
     ('h', {**{y: R((0, 36)) for y in range(0, 12)}, 12: R((15, 26)), 13: R((17, 24))}),
