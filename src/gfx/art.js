@@ -4,6 +4,9 @@
   const Pix = GS.Pix;
   const Art = (GS.Art = {});
   const chars = {};
+  // durée du fondu entre deux animations (s)
+  const MIX = 0.1;
+  const NO_MIX = { hurt: true, ahurt: true, ko: true, ako: true };
 
   class CharArt {
     constructor(def) {
@@ -19,6 +22,23 @@
         return Object.assign({}, f, { foot: GS.ModRig.FOOT, rig: true });
       }
       return { canvas: this.sp.body, foot: this.sp.foot, hand: this.sp.hand, weapon: this.sp.weapon, sp: this.sp };
+    }
+    // Comme frame(), avec un fondu de quelques images quand l'animation change (combattants :
+    // une instance par combattant). Pas de fondu vers « touché » ni « K.O. » : l'impact est net.
+    frameMix(anim, t = 0) {
+      if (!this.rig || typeof anim !== 'string') return this.frame(anim, t);
+      if (anim !== this.lastAnim) {
+        this.from = this.lastAnim && !NO_MIX[anim] ? { anim: this.lastAnim, t: this.lastT, t0: t } : null;
+        this.lastAnim = anim;
+      }
+      this.lastT = t;
+      const m = this.from;
+      if (m) {
+        const k = (t - m.t0) / MIX;
+        if (k >= 0 && k < 1) return Object.assign({}, this.rig.mix(m.anim, m.t, anim, t, k), { foot: GS.ModRig.FOOT, rig: true });
+        this.from = null;
+      }
+      return this.frame(anim, t);
     }
     silhouette(canvas, color) {
       const k = color;

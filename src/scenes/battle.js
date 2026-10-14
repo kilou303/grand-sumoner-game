@@ -1632,7 +1632,7 @@
 
     // ================================================================= rendu
     fighterImage(f) {
-      if (f.rig) return f.art.frame(f.anim, f.at).canvas;
+      if (f.rig) return f.art.frameMix(f.anim, f.at).canvas;
       const sp = f.sprite;
       if (sp.frames && f.alive) return sp.frames[Math.floor((f.at || 0) * 5 + f.slot) % sp.frames.length];
       return sp.body;
@@ -1728,7 +1728,7 @@
       const x = f.x + f.offX + (f.kx || 0);
       const y = f.y + f.offY + flyY - (f.jump || 0);
       if (f.rig) {
-        const fr = f.art.frame(f.anim, f.at);
+        const fr = f.art.frameMix(f.anim, f.at);
         const img = fr.canvas;
         const rs = f.rscale || 1;
         if (f.trail && f.trail.length) {

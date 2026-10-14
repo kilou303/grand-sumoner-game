@@ -19,12 +19,49 @@
   M.FOOT = { x: ROOT_X + 1, y: GROUND + 1 };
 
   // ------------------------------------------------------------ rastérisation
+  // Rotation façon RotSprite : le gabarit est agrandi ×8 par Scale2x (qui arrondit les
+  // diagonales au lieu de dupliquer les pixels), on y échantillonne la rotation puis on revient
+  // à la taille d'origine. Les membres tournés gardent des bords nets, sans trous ni escaliers.
+  const UP = 8;
+  const upCache = new WeakMap();
+  const scale2x = (g) => {
+    const h = g.length;
+    const w = g[0].length;
+    const at = (x, y) => (x < 0 || y < 0 || x >= w || y >= h ? '.' : g[y][x]);
+    const out = [];
+    for (let y = 0; y < h; y++) {
+      const r0 = [];
+      const r1 = [];
+      for (let x = 0; x < w; x++) {
+        const P = g[y][x];
+        const A = at(x, y - 1);
+        const B = at(x + 1, y);
+        const C = at(x - 1, y);
+        const D = at(x, y + 1);
+        r0.push(C === A && C !== D && A !== B ? A : P, A === B && A !== C && B !== D ? B : P);
+        r1.push(D === C && D !== B && C !== A ? C : P, B === D && B !== A && D !== C ? D : P);
+      }
+      out.push(r0, r1);
+    }
+    return out;
+  };
+  const upscaled = (tpl) => {
+    let u = upCache.get(tpl);
+    if (!u) {
+      u = tpl.map((row) => [...row]);
+      for (let k = 1; k < UP; k *= 2) u = scale2x(u);
+      upCache.set(tpl, u);
+    }
+    return u;
+  };
   // Place `tpl` pour que son point (ax, ay) tombe en (px, py), tourné de `ang` (sens horaire).
   const stampRot = (g, tpl, ax, ay, px, py, ang, map) => {
     const th = tpl.length;
     const tw = tpl[0].length;
     const c = Math.cos(ang);
     const s = Math.sin(ang);
+    // quasi droit : copie directe (identique au dessin d'origine)
+    const up = Math.abs(Math.sin(ang)) > 0.04 ? upscaled(tpl) : null;
     const rad = Math.ceil(Math.hypot(Math.max(ax, tw - ax), Math.max(ay, th - ay))) + 1;
     const out = [];
     for (let y = Math.floor(py - rad); y <= py + rad; y++) {
@@ -33,10 +70,10 @@
         if (x < 0 || x >= g.w) continue;
         const dx = x + 0.5 - px;
         const dy = y + 0.5 - py;
-        const tx = Math.floor(dx * c + dy * s + ax);
-        const ty = Math.floor(-dx * s + dy * c + ay);
-        if (ty < 0 || ty >= th || tx < 0 || tx >= tw) continue;
-        let ch = tpl[ty][tx];
+        const fx = dx * c + dy * s + ax;
+        const fy = -dx * s + dy * c + ay;
+        if (fy < 0 || fy >= th || fx < 0 || fx >= tw) continue;
+        let ch = up ? up[Math.floor(fy * UP)][Math.floor(fx * UP)] : tpl[Math.floor(fy)][Math.floor(fx)];
         if (ch === '.') continue;
         if (map && map[ch]) ch = map[ch];
         g[y][x] = ch;
@@ -182,6 +219,19 @@
           return;
         }
         const map = front ? null : this.shade;
+        // traînée d'un coup de pied rapide : deux images fantômes du tibia et du pied le long
+        // de la course, sous la jambe
+        const tr = pose.trail && pose.trail.legs[front ? 1 : 0];
+        if (tr && !lost['knee' + side]) {
+          for (const k of [0.35, 0.7]) {
+            const ga = U.lerp(tr.a, l.a, k);
+            const sa = ga - U.lerp(tr.k, l.k, k);
+            const kx = hx + Math.sin(ga) * L.thigh;
+            const ky = hip.y + Math.cos(ga) * L.thigh;
+            const s = limb(front ? 'shinF' : 'shinB', kx, ky, sa, map);
+            stampRot(g, P.shoe.t, P.shoe.pivot[0] + 0.5, P.shoe.pivot[1] + 0.5, s.ex, s.ey - 1, U.clamp(-sa * 0.65, -0.7, 1.4), map);
+          }
+        }
         const t = limb(front ? 'thighF' : 'thighB', hx, hip.y, l.a, map);
         pts['knee' + side] = { x: t.ex, y: t.ey };
         let cells = t.cells;
@@ -269,6 +319,20 @@
         const mp = null;
         const upN = front ? 'armUpF' : 'armUpB';
         const loN = front ? 'armLoF' : 'armLoB';
+        // traînée d'un coup rapide : deux images fantômes de l'avant-bras et du poing le long
+        // de la course, sous le bras
+        const tr = pose.trail && pose.trail.arms[front ? 1 : 0];
+        if (tr && !lost['lo' + side]) {
+          for (const k of [0.35, 0.7]) {
+            const ga = U.lerp(tr.a, arm.a, k);
+            const gf = ga + U.lerp(tr.e, arm.e || 0, k);
+            const ex = sh.x + Math.sin(ga) * len(P[upN]);
+            const ey = sh.y + Math.cos(ga) * len(P[upN]);
+            limb(loN, ex, ey, gf, mp);
+            const hl = len(P[loN]) + 0.5;
+            if (!lost['fist' + side]) stampRot(g, P.fist.t, P.fist.pivot[0] + 0.5, P.fist.pivot[1] + 0.5, ex + Math.sin(gf) * hl, ey + Math.cos(gf) * hl, -gf, mp);
+          }
+        }
         const u = limb(upN, sh.x, sh.y, arm.a, mp);
         pts['elb' + side] = { x: u.ex, y: u.ey };
         let cells = u.cells;
@@ -316,7 +380,8 @@
       const hy0 = neck.y + (pose.hy || 0) - (sp.headLift || 0);
       if (P.hairBack && !lost.head) {
         const hb = P.hairBack;
-        stampRot(g, hb.t, hb.pivot[0] + 0.5, hb.pivot[1] + 0.5, neck.x + (pose.hx || 0), hy0, headRot * 0.6);
+        // les cheveux pendent (ne suivent qu'en partie la tête) et traînent derrière l'élan
+        stampRot(g, hb.t, hb.pivot[0] + 0.5, hb.pivot[1] + 0.5, neck.x + (pose.hx || 0), hy0, headRot * 0.35 + (pose.hairLag || 0));
       }
       for (let y = 0; y < CH; y++) for (let x = 0; x < CW; x++) if (tg[y][x] !== '.') g[y][x] = tg[y][x];
       if (armUnder) seamUnder(g, armUnder);
@@ -481,25 +546,31 @@
         const n = map[n0] || n0;
         const C = CYCLES[n];
         const S = SEQ[n];
-        if (C) for (let f = 0; f < C.frames; f++) out.push(() => this.anim(n, ((f + 0.5) / C.frames) * C.dur));
-        else if (S) {
-          let acc = 0;
-          for (let i = 1; i < S.length; i++) {
-            const d = S[i][1];
-            for (let q = 0; q <= 4; q++) {
-              const t = acc + (d * q) / 4;
-              out.push(() => this.anim(n, t));
-            }
-            acc += d;
-          }
-        }
+        // toutes les images à 30 images/s
+        const dur = C ? C.dur : S ? M.seqDur(n) : 0;
+        for (let f = 0; f <= Math.ceil(dur * FPS); f++) out.push(() => this.anim(n, f / FPS));
       }
       return out;
     }
 
-    anim(anim, t = 0) {
+    // Pose d'une animation à l'instant t, avec les mouvements secondaires (d'après la pose
+    // deux images plus tôt).
+    posed(anim, t = 0) {
       const map = this.spec.animMap;
-      return this.frame(M.pose((map && map[anim]) || anim, t));
+      const name = (map && map[anim]) || anim;
+      const p = M.pose(name, t);
+      if (!CYCLES[name] && !SEQ[name]) return p;
+      return M.dynamics(p, M.pose(name, t - 2 / FPS));
+    }
+
+    anim(anim, t = 0) {
+      return this.frame(this.posed(anim, t));
+    }
+
+    // Fondu d'une animation (a1 figée à t1) vers une autre (a2 à t2), k de 0 à 1 (par tiers).
+    mix(a1, t1, a2, t2, k) {
+      const q = Math.round(U.clamp(k, 0, 1) * 3) / 3;
+      return this.frame(M.blend(this.posed(a1, t1), this.posed(a2, t2), EASE.inout(q)));
     }
   }
   M.Char = ModChar;
@@ -523,8 +594,40 @@
       hy: Math.round(p.hy || 0),
       legs: p.legs.map((l) => ({ a: q1(l.a), k: q1(l.k), toe: q1(l.toe) })),
       arms: p.arms.map((a) => ({ a: q1(a.a), e: q1(a.e), hand: a.hand || 'fist' })),
+      hairLag: q1(p.hairLag),
+      trail: p.trail
+        ? {
+            arms: p.trail.arms.map((a) => (a ? { a: q1(a.a), e: q1(a.e) } : null)),
+            legs: p.trail.legs.map((l) => (l ? { a: q1(l.a), k: q1(l.k) } : null)),
+          }
+        : null,
     };
   }
+
+  // Mouvements secondaires calculés d'après la vitesse de la pose (p) par rapport à la pose
+  // deux images plus tôt (q) : les cheveux et le bas du vêtement traînent derrière l'élan, et
+  // un membre qui balaie vite laisse une traînée.
+  const SMEAR = 0.45;
+  M.dynamics = (p, q) => {
+    const vx = (p.x || 0) - (q.x || 0);
+    const vy = (p.y || 0) - (q.y || 0);
+    const dl = (p.lean || 0) - (q.lean || 0);
+    const out = Object.assign({}, p);
+    out.hairLag = U.clamp(0.09 * vx - 0.9 * dl - 0.03 * vy, -0.7, 0.7);
+    out.sway = (p.sway || 0) + U.clamp(-0.5 * vx, -2, 2);
+    // seulement pour un coup : bras lancé vers l'avant ou le haut, jambe levée devant
+    const fast = (a, b) => Math.max(a.a, b.a) > 0.9 && Math.abs(a.a - b.a) + 0.5 * Math.abs((a.e || 0) - (b.e || 0)) > SMEAR;
+    const arms = p.arms.map((a, i) => {
+      const b = q.arms[i];
+      return (a.hand || 'fist') !== 'pocket' && (b.hand || 'fist') !== 'pocket' && fast(a, b) ? { a: b.a, e: b.e || 0 } : null;
+    });
+    const legs = p.legs.map((l, i) => {
+      const b = q.legs[i];
+      return Math.max(l.a, b.a) > 1.0 && Math.abs(l.a - b.a) > SMEAR ? { a: b.a, k: b.k } : null;
+    });
+    if (arms.some(Boolean) || legs.some(Boolean)) out.trail = { arms, legs };
+    return out;
+  };
 
   const lerp = U.lerp;
   M.blend = (p, q, t) => ({
@@ -622,8 +725,9 @@
       frames: 4,
       dur: 2.0,
       pose: (p) => {
-        const b = p >= 0.25 && p < 0.75 ? 1 : 0;
-        return Object.assign({}, K.idle, { y: b, squash: b ? -0.02 : 0 });
+        // respiration : le buste descend d'un pixel et s'écrase un peu, en douceur
+        const b = (1 - Math.cos(p * TAU)) / 2;
+        return Object.assign({}, K.idle, { y: Math.round(b), squash: -0.02 * b });
       },
     },
     // garde rebondissante façon jeu de combat
@@ -720,13 +824,35 @@
 
   M.seqDur = (name) => SEQ[name].reduce((s, k) => s + k[1], 0);
 
-  const easeOut = (t) => 1 - (1 - t) * (1 - t);
+  // ------------------------------------------------------------ interpolation
+  // Les animations sont échantillonnées à 30 images/s (rendu image par image, cache des poses)
+  // et chaque segment d'une séquence suit une courbe : 'inout' (anticipation, retour en garde),
+  // 'back' (coup : part vite, dépasse un peu la pose puis s'y pose), 'out', 'in', 'lin', 'snap'
+  // (reste sur la pose de départ puis bascule d'un coup). Par défaut : 'back' pour les segments
+  // très courts (frappes), 'inout' sinon ; un 3e élément [pose, durée, courbe] l'impose.
+  const FPS = (M.FPS = 30);
+  const EASE = (M.EASE = {
+    lin: (t) => t,
+    in: (t) => t * t,
+    out: (t) => 1 - (1 - t) * (1 - t),
+    inout: (t) => (t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) * (1 - t)),
+    back: (t) => {
+      const k = 1.9;
+      const u = t - 1;
+      return 1 + (k + 1) * u * u * u + k * u * u;
+    },
+    snap: (t) => (t < 0.6 ? 0 : 1),
+  });
+  const easeOf = (seg) => EASE[seg[2] || (seg[1] <= 0.06 ? 'back' : 'inout')];
+  const frameT = (t) => Math.round(t * FPS) / FPS;
+  M.frameT = frameT;
   M.pose = (anim, t = 0) => {
     if (typeof anim !== 'string') return anim;
+    t = frameT(t);
     const C = CYCLES[anim];
     if (C) {
       const p = (((t % C.dur) + C.dur) % C.dur) / C.dur;
-      return C.pose(Math.floor(p * C.frames) / C.frames);
+      return C.pose(p);
     }
     const S = SEQ[anim];
     if (S) {
@@ -734,9 +860,8 @@
       for (let i = 1; i < S.length; i++) {
         const d = S[i][1];
         if (t <= acc + d) {
-          // 30 images/s : on quantifie pour un rendu "image par image"
-          const u = d > 0 ? Math.round(((t - acc) / d) * 4) / 4 : 1;
-          return M.blend(K[S[i - 1][0]], K[S[i][0]], easeOut(U.clamp(u, 0, 1)));
+          const u = d > 0 ? U.clamp((t - acc) / d, 0, 1) : 1;
+          return M.blend(K[S[i - 1][0]], K[S[i][0]], easeOf(S[i])(u));
         }
         acc += d;
       }

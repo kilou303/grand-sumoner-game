@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Fluidité des animations</title>
+<style>html,body{margin:0;background:#141020}canvas{image-rendering:pixelated;display:block}</style>
+</head>
+<body>
+<canvas id="c" width="900" height="300"></canvas>
+<script src="../src/core/util.js"></script>
+<script src="../src/gfx/pixelart.js"></script>
+<script src="../src/gfx/modrig.js"></script>
+<script src="../src/gfx/heads.js"></script>
+<script src="../src/gfx/outfits.js"></script>
+<script src="../src/gfx/variants.js"></script>
+<script src="../src/gfx/azura_art.js"></script>
+<script src="../src/gfx/azura.js"></script>
+<script src="../src/gfx/vesper_art.js"></script>
+<script src="../src/gfx/vesper.js"></script>
+<script src="../src/gfx/sakura_art.js"></script>
+<script src="../src/gfx/sakura.js"></script>
+<script src="../src/gfx/valka_art.js"></script>
+<script src="../src/gfx/valka.js"></script>
+<script>
+  // Banc d'essai : trois héros enchaînent les mêmes coups ; renderAt(t) dessine l'instant t
+  // (utilisé par tools/gif.js pour comparer la fluidité avant / après).
+  const MR = GS.ModRig;
+  const S = 3;
+  const c = document.getElementById('c');
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  const heroes = [GS.Azura.rig(), GS.Vesper.rig(), GS.Valka.rig()];
+  const chain = ['stance', 'jab', 'cross', 'uppercut', 'kick', 'airKick', 'stance'];
+  const durOf = (n) => (MR.SEQ[(heroes[0].spec.animMap || {})[n] || n] ? MR.seqDur(n) + 0.05 : 0.6);
+  const plan = [];
+  let T = 0;
+  for (const n of chain) { plan.push([T, n]); T += durOf(n); }
+  window.DEMO_DUR = T;
+  window.renderAt = (t) => {
+    ctx.fillStyle = '#1c1830';
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.fillStyle = '#2a2440';
+    ctx.fillRect(0, (MR.FOOT.y + 1) * S, c.width, c.height);
+    let cur = plan[0];
+    for (const p of plan) if (p[0] <= t) cur = p;
+    heroes.forEach((h, i) => {
+      const f = h.anim(cur[1], t - cur[0]);
+      ctx.drawImage(f.canvas, i * 300 - 20, 0, f.canvas.width * S, f.canvas.height * S);
+    });
+  };
+  window.renderAt(0);
+</script>
+</body>
+</html>
