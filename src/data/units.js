@@ -29,6 +29,27 @@
       overlimit: { name: "Éveil de l'Ombre", target: 'enemies', anim: 'power', fx: 'void', power: 5.6, hits: 6, delay: 30, desc: "L'aura rouge se libère : dégâts massifs sur tous les ennemis." },
     },
 
+    {
+      id: 'azura',
+      name: 'Azura',
+      title: 'Poing des Marées',
+      rarity: 5,
+      element: 'water',
+      role: 'vitesse',
+      starter: true,
+      noGacha: true,
+      lore: 'Guerrière nomade aux cheveux azur, dernière de son clan. Ses poings frappent comme la houle.',
+      rig: () => GS.Azura.rig(),
+      look: { hair: 'ponytail', body: 'tunic', weapon: 'none', colors: { hair: '#306275', main: '#931834', second: '#596748', skin: '#f8ccab', eye: '#528d9f' } },
+      attack: { hits: 3, anim: 'brawl', fx: 'punch' },
+      skills: [
+        { name: 'Déferlante', mp: 30, target: 'enemy', anim: 'brawl', fx: 'water', power: 2.0, hits: 4, delay: 15, desc: 'Rafale de coups portés comme des vagues : retarde le tour ennemi.' },
+        { name: 'Souffle du Ressac', mp: 30, target: 'self', anim: 'support', fx: 'buff', effects: [e('spdUp', 3), e('critUp', 3)], desc: 'VIT↑ et CRITIQUE↑ pour soi (3 tours).' },
+      ],
+      special: { name: 'Typhon de Poings', target: 'enemy', anim: 'brawl', fx: 'water', power: 3.7, hits: 6, crit: 0.25, desc: 'Six coups tourbillonnants, critiques fréquents.' },
+      overlimit: { name: 'Raz-de-Marée Azur', target: 'enemies', anim: 'magic', fx: 'tsunami', power: 5.3, hits: 5, effects: [e('defDown', 3)], desc: 'Une vague géante déferle sur tous les ennemis + DÉF↓.' },
+    },
+
     // ============================================================ ★5
     {
       id: 'kaelen',

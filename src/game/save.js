@@ -33,7 +33,7 @@
       d = S.fresh();
       GS.data = d;
       // Héros de départ.
-      for (const id of ['djegui', 'toran', 'lina', 'pip']) S.addUnit(id);
+      for (const id of ['djegui', 'azura', 'toran', 'lina', 'pip']) S.addUnit(id);
       d.team = d.units.slice(0, 3).map((u) => u.uid);
       S.save();
     }
@@ -43,6 +43,10 @@
     GS.data.units = GS.data.units.filter((u) => GS.UNIT[u.id]);
     GS.data.team = GS.data.team.filter((uid) => S.unit(uid));
     if (!GS.data.team.length && GS.data.units.length) GS.data.team = [GS.data.units[0].uid];
+    // Héros de départ ajoutés après la création de la sauvegarde.
+    const missing = GS.UNITS.filter((u) => u.starter && !S.ownedById(u.id));
+    for (const u of missing) S.addUnit(u.id);
+    if (missing.length) S.save();
     return GS.data;
   };
 
