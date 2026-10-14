@@ -52,6 +52,14 @@
         animMap: ARMED,
         headLift: 0,
         frontArm: 'under',
+        // vraies vues de la tête (profil, dos) de la planche, sans le col ni le bâton ; deux
+        // lignes de cheveux doublées pour rattraper la taille de la tête de face
+        views: {
+          head: {
+            side: GS.ModRig.cutView(art.frames.side, 0, 17, [10, 18], { x1: 15, drop: 'Cci', dup: [3, 7] }),
+            back: GS.ModRig.cutView(art.frames.back, 0, 17, [10, 18], { x1: 17, drop: 'CciN', dup: [3, 7] }),
+          },
+        },
       });
     }
     return rig;

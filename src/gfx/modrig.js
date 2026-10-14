@@ -55,16 +55,19 @@
     return u;
   };
   // Gabarit tourné autour d'un axe vertical (colonne cx) : chaque ligne est enroulée sur un
-  // cylindre de section elliptique (profondeur = ratio × sa demi-largeur) ; chaque colonne
-  // montre le point le plus proche de la caméra. Les détails glissent sur le volume (le visage
-  // passe de face au profil) au lieu d'être écrasés. Le dos est pris dans `back` aux mêmes
-  // colonnes, vu en miroir (la tête y devient des cheveux). Rend { t, ax } : nouveau gabarit
-  // (élargi au besoin) et colonne de l'axe dans celui-ci.
+  // cylindre de section elliptique (profondeur = ratio × sa demi-largeur). La texture glisse
+  // à vitesse constante sur la moitié visible (pas d'écrasement près des bords : de profil, le
+  // visage garde sa place au lieu de se réduire à un trait), et la silhouette suit la largeur
+  // de l'ellipse vue sous cet angle. Le dos est pris dans `back` aux mêmes colonnes (la tête y
+  // devient des cheveux). Rend { t, ax } : nouveau gabarit (élargi au besoin) et colonne de
+  // l'axe dans celui-ci.
   const warpCache = new WeakMap();
+  const HALF_PI = Math.PI / 2;
+  const wrapPi = (a) => a - 2 * Math.PI * Math.round(a / (2 * Math.PI));
   const warp = (tpl, back, cx, yaw, ratio) => {
     let m = warpCache.get(tpl);
     if (!m) warpCache.set(tpl, (m = new Map()));
-    const key = yaw.toFixed(4) + ':' + cx + ':' + ratio;
+    const key = yaw.toFixed(4) + ':' + cx + ':' + ratio + ':' + (back === tpl ? '' : 'b');
     let r = m.get(key);
     if (r) return r;
     const h = tpl.length;
@@ -99,36 +102,46 @@
     const cen = smooth((o) => (o[0] + o[1]) / 2);
     const half = smooth((o) => (o[1] - o[0]) / 2);
     const rad = span.map((sp, y) => (sp ? Math.max(cen[y] - sp[0], sp[1] - cen[y], half[y]) : 0));
+    const cy = Math.cos(yaw);
+    const sy = Math.sin(yaw);
+    // demi-largeur à l'écran de l'ellipse tournée
+    const wid = (R) => Math.hypot(R * cy, R * ratio * sy);
     let ext = 1;
     span.forEach((sp, y) => {
-      if (sp) ext = Math.max(ext, Math.abs(cen[y] - cx) + rad[y]);
+      if (sp) ext = Math.max(ext, Math.abs((cen[y] - cx) * cy) + wid(rad[y]));
     });
     const Rm = Math.ceil(ext);
     const W = 2 * Rm + 2;
     const ax = Rm + 1 + (cx - Math.floor(cx));
-    const cy = Math.cos(yaw);
-    const sy = Math.sin(yaw);
+    // point d'angle th de la ligne (th = 0 : milieu du gabarit, ±π/2 : ses bords, au-delà :
+    // le dos), réparti linéairement sur la largeur du gabarit
+    const sample = (row, bk, c, R, th) => {
+      let a = wrapPi(th);
+      let src = row;
+      if (Math.abs(a) > HALF_PI) {
+        src = bk;
+        a = Math.sign(a) * Math.PI - a;
+      }
+      const sx = Math.floor(c + (a / HALF_PI) * R);
+      return sx < 0 || sx >= w ? '.' : src[sx];
+    };
     const t = tpl.map((row, y) => {
       const R = rad[y];
       const out = new Array(W).fill('.');
       if (!R) return out.join('');
       const c = cen[y];
-      const Rz = R * ratio;
-      const best = new Float64Array(W).fill(-Infinity);
-      const N = Math.ceil(R * 24);
-      for (let i = 0; i < N; i++) {
-        const th = ((i + 0.5) / N - 0.5) * 2 * Math.PI;
-        const px = R * Math.sin(th);
-        const pz = Rz * Math.cos(th);
-        const j = Math.floor(ax + (c - cx + px) * cy + pz * sy);
-        const z = -px * sy + pz * cy;
-        if (j < 0 || j >= W || z <= best[j]) continue;
+      const Wd = wid(R);
+      const sc = ax + (c - cx) * cy;
+      // milieu de la moitié visible (angle du point le plus proche de la caméra)
+      const mid = Math.atan2(R * cy, R * ratio * sy) - HALF_PI;
+      for (let j = Math.floor(sc - Wd); j <= Math.ceil(sc + Wd); j++) {
+        if (j < 0 || j >= W) continue;
+        const u = (j + 0.5 - sc) / Wd;
+        if (Math.abs(u) > 1) continue;
+        let ch = sample(row, back[y], c, R, mid + u * HALF_PI);
         // un trou du gabarit laisse voir ce qu'il y a derrière (l'autre face du volume)
-        const sx = Math.floor(c + px);
-        const ch = sx < 0 || sx >= w ? '.' : (pz >= 0 ? row : back[y])[sx];
-        if (ch === '.') continue;
-        best[j] = z;
-        out[j] = ch;
+        if (ch === '.') ch = sample(row, back[y], c, R, mid + Math.PI - u * HALF_PI);
+        if (ch !== '.') out[j] = ch;
       }
       return out.join('');
     });
@@ -137,6 +150,24 @@
     return r;
   };
   M.warp = warp;
+  // Vue (profil, dos) découpée dans une image de la planche, pour spec.views : lignes y0..y1,
+  // colonnes o.x0..o.x1, sans les couleurs o.drop ; o.dup : lignes (de l'image) doublées pour
+  // rattraper la taille de la pièce de face. Pivot dans le repère de l'image.
+  M.cutView = (rows, y0, y1, pivot, o = {}) => {
+    const x0 = o.x0 || 0;
+    const x1 = o.x1 === undefined ? rows[0].length - 1 : o.x1;
+    const t = [];
+    let py = pivot[1] - y0;
+    for (let y = y0; y <= y1; y++) {
+      const row = [...rows[y]].map((ch, x) => (x < x0 || x > x1 || (o.drop && o.drop.includes(ch)) ? '.' : ch)).join('');
+      t.push(row);
+      if (o.dup && o.dup.includes(y)) {
+        t.push(row);
+        if (y < pivot[1]) py++;
+      }
+    }
+    return { t, pivot: [pivot[0], py] };
+  };
   // Pièce tournée : enroulée sur son propre volume (autour du centre de sa boîte) puis placée
   // comme un point du corps situé à cette distance de l'axe (cx) et à z0 en profondeur.
   // Rend { t, ax } : gabarit et colonne de l'axe du corps dans ce gabarit.
@@ -285,6 +316,10 @@
   const TORSO_DEPTH = 0.55;
   const HEAD_DEPTH = 0.9;
   const ARM_DEPTH = 0.8;
+  // Les pièces sont dessinées de trois quarts (tournées vers la droite d'environ 30°) : une
+  // rotation du corps de θ montre la tête sous l'angle réel θ + ART_ANGLE·max(0, cos θ), qui
+  // vaut ±90° (vrai profil) quand le squelette est de profil et 180° quand il est de dos.
+  M.ART_ANGLE = 0.5;
   const lumOf = (h) => {
     const [r, g, b] = U.hexToRgb(h);
     return 0.3 * r + 0.59 * g + 0.11 * b;
@@ -342,15 +377,19 @@
       if (fam) for (const [k, f] of Object.entries(fam)) if (f.startsWith('head:')) mat[k] = f.slice(5);
       const top = new Set();
       for (const row of t.slice(0, Math.max(2, Math.round(t.length / 4)))) for (const ch of row) top.add(ch);
-      const hairy = (ch) => ch !== '.' && (mat[ch] ? mat[ch] === 'hair' : top.has(ch));
+      // le contour (yeux, sourcils, traits du visage) n'est pas des cheveux, sauf sur le bord
+      const ol = this.spec.outline;
+      const known = Object.keys(mat).length > 0;
+      const hairy = (ch) => ch !== undefined && ch !== '.' && (known && mat[ch] ? mat[ch] === 'hair' : top.has(ch) && ch !== ol);
+      const edge = (x, y) => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => ((t[y + dy] || '')[x + dx] || '.') === '.');
       const count = {};
       for (const row of t) for (const ch of row) if (hairy(ch)) count[ch] = (count[ch] || 0) + 1;
       const main = Object.keys(count).sort((a, b) => count[b] - count[a])[0];
       if (!main) return (this._headHair = null);
-      this._headHair = t.map((row) =>
+      this._headHair = t.map((row, y) =>
         [...row]
           .map((ch, x) => {
-            if (ch === '.' || hairy(ch)) return ch;
+            if (ch === '.' || hairy(ch) || (ch === ol && edge(x, y))) return ch;
             for (let d = 1; d < row.length; d++) {
               if (hairy(row[x - d])) return row[x - d];
               if (hairy(row[x + d])) return row[x + d];
@@ -360,6 +399,75 @@
           .join('')
       );
       return this._headHair;
+    }
+
+    // Dos du torse (vue de dos, ou face cachée pendant une rotation) : sans les détails du
+    // devant (chemise, fermeture, cravate, boutons...). Dans la pose 3/4, le côté gauche du
+    // torse montre le flanc : ses couleurs forment la matière du dos ; sur chaque ligne, un
+    // pixel d'une autre couleur prend celle du pixel de matière le plus proche (le contour
+    // extérieur reste).
+    torsoBack() {
+      if (this._torsoBack !== undefined) return this._torsoBack;
+      const t = this.P.torso.t;
+      const ol = this.spec.outline;
+      const fam = this.spec.shadeFamily;
+      const lefts = t.map((row) => {
+        const xs = [];
+        for (let x = 0; x < row.length; x++) if (row[x] !== '.' && row[x] !== ol) xs.push(x);
+        return new Set(xs.slice(0, Math.max(2, Math.ceil(xs.length * 0.4))).map((x) => row[x]));
+      });
+      // persos assemblés : matières connues ; la chemise vue par l'ouverture de la veste et
+      // les détails (cravate, boutons...) ne sont pas dans le dos
+      const jacket = fam && Object.values(fam).includes('top:jacket');
+      const famOk = (ch) => fam[ch] && fam[ch].startsWith('top:') && !fam[ch].endsWith(':?') && !(jacket && fam[ch] === 'top:inner');
+      const edge = (x, y) => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => ((t[y + dy] || '')[x + dx] || '.') === '.');
+      this._torsoBack = t.map((row, y) => {
+        const mat = new Set();
+        for (let k = -2; k <= 2; k++) if (lefts[y + k]) for (const ch of lefts[y + k]) mat.add(ch);
+        const ok = (ch) => ch !== undefined && ch !== '.' && ch !== ol && (fam ? famOk(ch) : mat.has(ch));
+        return [...row]
+          .map((ch, x) => {
+            if (ch === '.' || ok(ch) || (ch === ol && edge(x, y))) return ch;
+            for (let d = 1; d < row.length; d++) {
+              if (ok(row[x - d])) return row[x - d];
+              if (ok(row[x + d])) return row[x + d];
+            }
+            return ch;
+          })
+          .join('');
+      });
+      return this._torsoBack;
+    }
+
+    // Vue d'une pièce (head, hairBack, torso) pour une rotation θ : le dessin 3/4, ou sa vraie
+    // vue de profil (miroir pour l'autre profil) ou de dos quand le perso en a (spec.views),
+    // la plus proche de l'angle réel. Rend { t, back, pivot, d } : gabarit, sa face cachée,
+    // son pivot et la rotation qui reste à faire par enroulement (d).
+    viewOf(name, th, base, back, real = true) {
+      const ART = this.spec.artAngle !== undefined ? this.spec.artAngle : M.ART_ANGLE;
+      th = wrapPi(th);
+      const phi = th + ART * Math.max(0, Math.cos(th));
+      // le torse suit le squelette (ses épaules, ses hanches) ; la tête prend l'angle réel
+      let best = { t: base.t, back, pivot: base.pivot, d: name === 'torso' ? th : phi - ART, a: ART };
+      const V = real && this.spec.views && this.spec.views[name];
+      if (!V) return best;
+      const cands = [];
+      if (V.side) cands.push([HALF_PI, V.side], [-HALF_PI, this.mirrorView(V.side)]);
+      if (V.back) cands.push([Math.PI, V.back]);
+      let bd = Math.abs(wrapPi(phi - ART));
+      for (const [a, v] of cands) {
+        const dd = Math.abs(wrapPi(phi - a));
+        if (dd < bd) {
+          bd = dd;
+          best = { t: v.t, back: v.t, pivot: v.pivot, d: wrapPi(phi - a), a, real: true };
+        }
+      }
+      return best;
+    }
+
+    mirrorView(v) {
+      if (!v._m) v._m = { t: v.t.map((r) => [...r].reverse().join('')), pivot: [v.t[0].length - 1 - v.pivot[0], v.pivot[1]] };
+      return v._m;
     }
 
     render(pose) {
@@ -492,13 +600,23 @@
       const intact = (side) => !lost['arm' + side] && !lost['lo' + side] && !lost['fist' + side];
       const pocketB = (pose.arms[0].hand || 'fist') === 'pocket' && P.pocketB && intact('B');
       const pocketF = (pose.arms[1].hand || 'fist') === 'pocket' && P.pocketF && intact('F');
-      // corps tourné : torse enroulé sur son volume (dos au-delà d'un quart de tour)
+      // corps tourné : torse enroulé sur son volume (dos au-delà d'un quart de tour), ou sa
+      // vraie vue de profil / de dos ; une vue qui montre les bras dans les poches ne sert que
+      // si les deux mains y sont (et remplace alors les poches)
       const back = cyw < 0;
+      const tvs = sp.views && sp.views.torso;
+      const tv = turned ? this.viewOf('torso', yaw, tp, this.torsoBack(), !(tvs && tvs.arms) || (pocketF && pocketB)) : null;
+      const viewArms = !!(tv && tv.real && tvs.arms);
       const torsoStamp = (part, cells) => {
+        if (part === 'torso' && tv) {
+          const wp = tv.d ? turnPiece(tv.t, tv.back, tv.pivot[0] + 0.5, tv.d, TORSO_DEPTH) : { t: tv.t, ax: tv.pivot[0] + 0.5 };
+          return stampTorso(g, wp.t, wp.ax, tv.pivot[1] + 0.5, hip.x, hip.y, lean, sy, pose.sway || 0, 5, pose.hipLean, cells);
+        }
+        if (part !== 'torso' && viewArms) return null;
         const pp = P[part];
         // les bras dans les poches sont des volumes à part, à la profondeur des épaules
         const z0 = part === 'torso' ? 0 : part === 'pocketF' ? zF : zB;
-        const wp = turned ? turnPiece(pp.t, pp.t, pp.pivot[0] + 0.5, yaw, part === 'torso' ? TORSO_DEPTH : ARM_DEPTH, z0) : { t: pp.t, ax: pp.pivot[0] + 0.5 };
+        const wp = turned ? turnPiece(pp.t, pp.t, pp.pivot[0] + 0.5, yaw, ARM_DEPTH, z0) : { t: pp.t, ax: pp.pivot[0] + 0.5 };
         return stampTorso(g, wp.t, wp.ax, pp.pivot[1] + 0.5, hip.x, hip.y, lean, sy, pose.sway || 0, 5, pose.hipLean, cells);
       };
       // bras avant derrière le torse (tous sauf Djegui) : sa poche passe sous le torse
@@ -668,17 +786,22 @@
       const headRot = (pose.tilt || 0) * Math.cos(hyaw) + lean0 * 0.5 * cyw;
       const hy0 = neck.y + (pose.hy || 0) - (sp.headLift || 0);
       const hx0 = neck.x + (pose.hx || 0) * cyw;
+      // pièce de la tête vue sous l'angle de la tête (vraie vue de profil / de dos s'il y en a)
+      const headPiece = (name, base, bk) => {
+        const v = hyaw ? this.viewOf(name, hyaw, base, bk) : { t: base.t, pivot: base.pivot, d: 0 };
+        const { t, ax } = v.d ? turnPiece(v.t, v.back, v.pivot[0] + 0.5, v.d, HEAD_DEPTH) : { t: v.t, ax: v.pivot[0] + 0.5 };
+        return { t, ax, ay: v.pivot[1] + 0.5 };
+      };
       if (P.hairBack && !lost.head) {
-        const hb = P.hairBack;
-        const { t, ax } = hyaw ? turnPiece(hb.t, hb.t, hb.pivot[0] + 0.5, hyaw, HEAD_DEPTH) : { t: hb.t, ax: hb.pivot[0] + 0.5 };
+        const { t, ax, ay } = headPiece('hairBack', P.hairBack, P.hairBack.t);
         // les cheveux pendent (ne suivent qu'en partie la tête) et traînent derrière l'élan
         const rot = headRot * 0.35 + (pose.hairLag || 0);
-        add(hBack ? 75 : 50, 0, () => stampRot(g, t, ax, hb.pivot[1] + 0.5, hx0, hy0, rot));
+        add(hBack ? 75 : 50, 0, () => stampRot(g, t, ax, ay, hx0, hy0, rot));
       }
       const hp = P.head;
       if (!lost.head) {
-        const { t, ax } = hyaw ? turnPiece(hp.t, this.headHair() || hp.t, hp.pivot[0] + 0.5, hyaw, HEAD_DEPTH) : { t: hp.t, ax: hp.pivot[0] + 0.5 };
-        add(70, neck.z - neck.z0, () => stampRot(g, t, ax, hp.pivot[1] + 0.5, hx0, hy0, headRot));
+        const { t, ax, ay } = headPiece('head', hp, this.headHair() || hp.t);
+        add(70, neck.z - neck.z0, () => stampRot(g, t, ax, ay, hx0, hy0, headRot));
       } else stumps.push([neck.x, neck.y - 1, 6, 3]);
 
       // ---------------------------------------------------------- dessin, du fond vers l'avant

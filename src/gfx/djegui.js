@@ -23,12 +23,20 @@
   let rig = null;
   D.rig = () => {
     if (!rig) {
+      const art = GS.DJEGUI_ART;
+      const cut = GS.ModRig.cutView;
       rig = new GS.ModRig.Char({
-        art: GS.DJEGUI_ART,
+        art,
         joints: { hip: [14, 41], neck: [14, 15], shoulderF: [24, 19], shoulderB: [5, 20] },
         hipF: 4,
         hipB: -6,
         outline: 'H',
+        // vraies vues de profil et de dos de la planche (rotation du corps) ; le torse y a
+        // les mains dans les poches
+        views: {
+          head: { side: cut(art.frames.side1, 0, 16, [10, 16]), back: cut(art.frames.back, 0, 16, [14, 16]) },
+          torso: { side: cut(art.frames.side1, 16, 42, [9, 42]), back: cut(art.frames.back, 16, 42, [14, 42]), arms: true },
+        },
       });
     }
     return rig;
