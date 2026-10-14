@@ -13,6 +13,14 @@
       show: ['malik', 'iris', 'dante'],
     },
     {
+      id: 'cosmos',
+      name: 'Ange du Cosmos',
+      sub: 'Taux de TOUT PUISSANT augmenté !',
+      featured: 'toutpuissant',
+      color: '#4ab0ff',
+      show: ['toutpuissant'],
+    },
+    {
       id: 'aube',
       name: 'Aube Radieuse',
       sub: 'Taux de KAELEN augmenté !',

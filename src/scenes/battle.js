@@ -687,6 +687,7 @@
       return f.def.fxColor || GS.EL[f.element].color;
     }
     schemeOf(f, ab) {
+      if (f.def && f.def.fxScheme) return f.def.fxScheme;
       if (f.def && f.def.fxColor) return 'blood';
       return SCHEME_OF[(ab && ab.element) || f.element] || 'fire';
     }
@@ -1183,6 +1184,46 @@
           this.shake(2);
         }
         yield 0.3;
+      } else if (fxName === 'galaxy') {
+        // Sphère cosmique (Tout Puissant) : une boule d'énergie part du bâton et explose en galaxie
+        const TP = GS.ToutPuissant;
+        A().sfx('magic');
+        for (const t of alive()) {
+          const p = this.fx.projectile(f.cx + d * 16, f.cy - 22, t.cx, t.cy, { color: '#58baf4', sprite: TP.fx('ball'), spin: 9, dur: 0.32, arc: 14 });
+          yield* GS.until(() => p.done);
+          this.fx.sprite(TP.fx('galaxy'), t.cx, t.cy, { dur: 0.7, grow: 0.8, spin: 3 });
+          this.fx.sprite(TP.fx('swirl'), t.cx, t.y - 4, { dur: 0.6, scale: 0.6, grow: 0.6 });
+          A().sfx('explosion');
+          for (let i = 0; i < hits; i++) {
+            this.strike(f, t, ab, 1 / hits, { silent: i > 0 });
+            this.shake(3);
+            yield 0.1;
+          }
+        }
+        yield 0.3;
+      } else if (fxName === 'cosmos') {
+        // Jugement cosmique (Tout Puissant) : il libère son aura puis une galaxie engloutit les ennemis
+        const TP = GS.ToutPuissant;
+        f.still = stillOf('aura');
+        A().sfx('charge');
+        this.fx.sprite(TP.fx('column'), f.x, f.y + 2, { dur: 0.9, anchor: 'bottom', grow: 0.4 });
+        yield 0.6;
+        f.still = null;
+        const [cx, , cy] = center();
+        this.fx.sprite(TP.fx('galaxy'), cx, cy, { dur: 1.2, scale: 1.6, grow: 1.2, spin: 2 });
+        this.fx.sprite(TP.fx('swirl'), cx, cy + 10, { dur: 1.0, scale: 1.4, grow: 0.8 });
+        this.screenFlash = 0.6;
+        this.flashColor = '#4ab0ff';
+        A().sfx('explosion');
+        for (let i = 0; i < hits; i++) {
+          for (const t of alive()) {
+            this.fx.sprite(TP.fx('column'), t.cx + U.rand(-6, 6), t.y + 2, { dur: 0.5, scale: 0.7, anchor: 'bottom' });
+            this.strike(f, t, ab, 1 / hits, { silent: i > 0 });
+          }
+          this.shake(5);
+          yield 0.16;
+        }
+        yield 0.4;
       } else if (fxName === 'nova') {
         const [cx, , cy] = center();
         A().sfx('explosion');
@@ -1316,6 +1357,23 @@
 
     *animSupport(f, ab, targets) {
       const col = ab.heal ? '#70ff90' : GS.EL[f.element].color;
+      if (ab.fx === 'meditate' || ab.fx === 'rewind') {
+        // Tout Puissant : pose relevée sur sa planche (méditation en lévitation / aura)
+        const TP = GS.ToutPuissant;
+        f.still = stillOf(ab.fx === 'meditate' ? 'meditate' : 'aura');
+        A().sfx(ab.fx === 'meditate' ? 'heal' : 'charge');
+        this.fx.sprite(TP.fx('column'), f.x, f.y + 2, { dur: 1.0, anchor: 'bottom', grow: 0.3 });
+        yield 0.5;
+        for (const t of targets) {
+          if (!t.alive && !ab.revive) continue;
+          this.fx.sprite(TP.fx('column'), t.x, t.y + 2, { dur: 0.9, scale: 0.8, anchor: 'bottom' });
+          this.fx.ring(t.cx, t.cy, { color: '#58baf4', r0: 22, r1: 4, dur: 0.5 });
+          if (ab.fx === 'rewind') this.fx.sprite(TP.fx('swirl'), t.cx, t.cy, { dur: 0.8, scale: 0.6, spin: -6 });
+        }
+        yield 0.6;
+        f.still = null;
+        return;
+      }
       yield* this.castPose(f, col);
       for (const t of targets) {
         if (!t.alive && !ab.revive) continue;
@@ -1337,6 +1395,12 @@
       const fx = ab.fx;
       const x = t.cx;
       const y = t.cy;
+      if (fx === 'staff' && GS.ToutPuissant) {
+        // coup de bâton de Tout Puissant : croissant bleu relevé sur sa planche
+        this.fx.sprite(GS.ToutPuissant.fx('crescent'), x, y, { dur: 0.28, scale: small ? 0.45 : 0.6, flip: Math.random() < 0.5 });
+        this.fx.impact(x, y, { scheme: 'water', spark: '#a8e0fa' });
+        return;
+      }
       const n = small ? 8 : 14;
       const sc = this.schemeOf(f, ab);
       if (fx === 'fire') {
@@ -1815,7 +1879,8 @@
       const x = f.x + f.offX + (f.kx || 0);
       const y = f.y + f.offY + flyY - (f.jump || 0);
       if (f.rig) {
-        const fr = f.art.frameMix(f.anim, f.at);
+        // image fixe relevée sur la planche du perso (méditation, aura...) ou rig
+        const fr = f.still || f.art.frameMix(f.anim, f.at);
         const img = fr.canvas;
         const rs = f.rscale || 1;
         if (f.trail && f.trail.length) {
@@ -1856,13 +1921,15 @@
         }
         ctx.restore();
         // yeux rouges qui brillent
-        if (f.def.fxColor && f.alive && fr.head) {
+        // yeux qui brillent (rouges pour Djegui ; eyeGlow: null pour aucun)
+        const glow = f.def.eyeGlow !== undefined ? f.def.eyeGlow : f.def.fxColor ? '#ff2a3a' : null;
+        if (glow && f.alive && fr.head && !f.still) {
           const ex = x + (fr.head.x - fr.foot.x) * (f.dir < 0 ? -1 : 1);
           const ey = y + fr.head.y - fr.foot.y + 4;
           ctx.save();
           ctx.globalCompositeOperation = 'lighter';
           ctx.globalAlpha = 0.25 + Math.sin(this.t * 3) * 0.1;
-          R.circle(ex + 2 * f.dir, ey, 3, '#ff2a3a');
+          R.circle(ex + 2 * f.dir, ey, 3, glow);
           ctx.restore();
         }
       } else {
@@ -2239,7 +2306,7 @@
       const f = c.f;
       const el = GS.EL[f.element];
       const main = f.def.fxColor || el.color;
-      const dark = f.def.fxColor ? '#3a0410' : el.dark;
+      const dark = f.def.fxDark || (f.def.fxColor ? '#3a0410' : el.dark);
       ctx.save();
       R.fade(Math.min(0.75, t * 4), '#05030c');
       const open = E.outCubic(Math.min(1, t / 0.2));
@@ -2264,7 +2331,11 @@
       ctx.globalAlpha = 1;
       const slide = E.outCubic(Math.min(1, t / 0.35));
       const px = U.lerp(-160, 30, slide) + t * 14;
-      if (f.rig) GS.Art.portrait(f.def, px, cy - 70, 190, 150, 3, { focusY: 8 });
+      if (f.def.cutin) {
+        // grand portrait relevé sur la planche du perso
+        const cv = f.def.cutin();
+        ctx.drawImage(cv, Math.round(px + 20), Math.round(cy - 58));
+      } else if (f.rig) GS.Art.portrait(f.def, px, cy - 70, 190, 150, 3, { focusY: 8 });
       else GS.Art.portrait(f.def, px, cy - 60, 170, 120, 4, { focusX: 15, focusY: 14 });
       ctx.restore();
       R.line(0, cy - bh / 2 + 22, W(), cy - bh / 2 - 22, '#ffffff');
@@ -2323,6 +2394,15 @@
       ctx.drawImage(img, Math.round(-fx), Math.round(-fy));
     } else ctx.drawImage(img, Math.round(x + w / 2 - fx * k), Math.round(y + h / 2 - fy * k), img.width * k, img.height * k);
     ctx.restore();
+  }
+
+  // Image fixe d'une planche (Tout Puissant) dessinée à la place du rig, pieds en bas.
+  function stillOf(name) {
+    const TP = GS.ToutPuissant;
+    const cv = TP && TP.frame(name);
+    if (!cv) return null;
+    const m = GS.TOUTPUISSANT_ART.meta[name] || {};
+    return { canvas: cv, foot: { x: (m.cx !== undefined ? m.cx : cv.width / 2) + 1, y: cv.height - 1 } };
   }
 
   // Silhouettes en cache par image.

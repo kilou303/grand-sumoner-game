@@ -31,6 +31,31 @@
     },
 
     {
+      id: 'toutpuissant',
+      name: 'Tout Puissant',
+      title: "L'Ange du Cosmos",
+      rarity: 5,
+      element: 'light',
+      role: 'mage',
+      fxColor: '#4ab0ff',
+      fxDark: '#06123a',
+      fxScheme: 'water',
+      eyeGlow: null,
+      lore: "Gardien d'un royaume au-delà des étoiles. Il ne se bat presque jamais : quand il lève son bâton, le combat est déjà fini.",
+      // sprites relevés sur sa planche (art/reference/tout_puissant_sheet.png)
+      rig: () => GS.ToutPuissant.rig(),
+      cutin: () => GS.ToutPuissant.frame('big'),
+      look: { hair: 'spiky', body: 'robe', weapon: 'staff', colors: { hair: '#e2e2ee', main: '#82122f', cape: '#82122f', second: '#17131c', skin: '#5a2a20', eye: '#4ab0ff', accent: '#58baf4' } },
+      attack: { hits: 2, anim: 'melee', fx: 'staff' },
+      skills: [
+        { name: 'Sphère Cosmique', mp: 30, target: 'enemy', anim: 'magic', fx: 'galaxy', power: 2.3, hits: 3, desc: "Une boule d'énergie qui explose en galaxie." },
+        { name: 'Méditation Céleste', mp: 40, target: 'allies', anim: 'support', fx: 'meditate', heal: 1.6, effects: [e('regen', 3), e('defUp', 3)], desc: "Il lévite et soigne l'équipe : RÉG et DÉF↑ (3 tours)." },
+      ],
+      special: { name: 'Retour Temporel', target: 'allies', anim: 'support', fx: 'rewind', heal: 2.2, revive: 0.6, effects: [e('atkUp', 3)], desc: "Il remonte le temps : ranime et soigne l'équipe, ATQ↑." },
+      overlimit: { name: 'Jugement Cosmique', target: 'enemies', anim: 'magic', fx: 'cosmos', power: 5.4, hits: 5, effects: [e('defDown', 3, 0.7)], desc: 'Il libère son aura : une galaxie engloutit tous les ennemis.' },
+    },
+
+    {
       id: 'azura',
       name: 'Azura',
       title: 'Poing des Marées',
