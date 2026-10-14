@@ -1,6 +1,7 @@
 'use strict';
 // Sakura : sprite relevé sur son image de référence (art/reference/sakura_sprite.jpg),
 // animé de façon modulaire comme Djegui et Azura (pièces découpées dans sa pose 3/4).
+// Bras avant derrière le torse, comme les héros du créateur de perso.
 (function () {
   let rig = null;
   GS.Sakura = {
@@ -13,6 +14,7 @@
           hipF: 5,
           hipB: -4,
           outline: 'A',
+          frontArm: 'under',
         });
       }
       return rig;
