@@ -210,5 +210,6 @@
         '...EGCC',
       ] },
     },
+    mat: {"head": {"I": "hair", "L": "hair", "P": "hair", "T": "hair", "S": "skin", "N": "skin", "K": "skin", "W": "eyes", "X": "eyes"}, "top": {"M": "jacket", "O": "jacket", "Q": "jacket", "R": "jacket", "U": "jacket", "V": "jacket", "B": "inner", "D": "inner", "F": "inner", "H": "inner", "S": "skin", "N": "skin", "K": "skin"}, "legs": {"S": "skin", "N": "skin", "K": "skin", "C": "pants", "E": "pants", "G": "shoes"}},
   };
 })();

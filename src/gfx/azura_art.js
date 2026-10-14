@@ -224,5 +224,6 @@
         'GC.GJJP',
       ] },
     },
+    mat: {"head": {"D": "hair", "F": "hair", "K": "hair", "O": "hair", "P": "skin", "R": "skin", "S": "skin", "U": "skin"}, "top": {"B": "jacket", "H": "jacket", "C": "inner", "G": "inner", "J": "inner", "M": "inner", "N": "metal", "Q": "metal", "T": "metal", "P": "skin", "R": "skin", "S": "skin", "U": "skin", "E": "pants", "I": "pants", "L": "pants", "D": "hair", "F": "hair", "K": "hair"}, "legs": {"E": "pants", "I": "pants", "L": "pants", "C": "shoes", "G": "shoes", "J": "shoes", "M": "shoes", "N": "metal", "Q": "metal", "T": "metal"}},
   };
 })();

@@ -230,5 +230,6 @@
         '...GEECG',
       ] },
     },
+    mat: {"head": {"W": "hair", "X": "hair", "a": "hair", "Y": "hair", "Z": "hair", "b": "hair", "C": "hair", "M": "skin", "Q": "skin", "R": "skin", "V": "skin", "N": "eyes"}, "top": {"W": "hair", "X": "hair", "a": "hair", "Y": "hair", "Z": "hair", "b": "hair", "C": "jacket", "E": "jacket", "G": "jacket", "I": "jacket", "L": "jacket", "S": "jacket", "D": "inner", "F": "inner", "H": "inner", "J": "inner", "K": "inner", "O": "inner", "M": "skin", "Q": "skin", "R": "skin", "V": "skin", "N": "glow", "T": "glow", "U": "glow"}, "legs": {"C": "pants", "E": "pants", "G": "pants", "I": "pants", "L": "pants", "S": "pants", "D": "inner", "F": "inner", "H": "inner", "J": "inner", "K": "inner", "O": "inner", "N": "glow", "T": "glow", "U": "glow"}},
   };
 })();

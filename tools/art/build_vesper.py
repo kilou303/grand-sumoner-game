@@ -108,7 +108,18 @@ PIV = {
     'shoe': ((20, 53), (23, 56)),
 }
 
+# ------------------------------------------------------------------ matières
+# Clés de la palette par matière, pour chaque groupe de pièces (tête, corps, jambes) :
+# le créateur de perso les recolore et mélange les modèles (voir GS.Variants.buildRef).
+MATERIALS = {
+    'head': {'hair': 'WXaYZbC', 'skin': 'MQRV', 'eyes': 'N'},
+    'top': {'hair': 'WXaYZb', 'jacket': 'CEGILS', 'inner': 'DFHJKO', 'skin': 'MQRV', 'glow': 'NTU'},
+    'legs': {'pants': 'CEGILS', 'inner': 'DFHJKO', 'glow': 'NTU'},
+}
+
+
 build({
+    'materials': MATERIALS,
     'name': 'Vesper', 'var': 'VESPER_ART', 'src': SRC, 'out': os.path.join(ROOT, 'src', 'gfx', 'vesper_art.js'),
     'pitch': 9.65, 'off': (8.5, 9.5), 'floor': 88,
     # tenue presque noire : seul le noir pur est du contour, pas de surpoids des traits

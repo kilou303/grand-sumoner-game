@@ -3,6 +3,9 @@
 // animé de façon modulaire comme Djegui et Azura (pièces découpées dans sa pose 3/4).
 // Bras avant derrière le torse et pistolet du créateur de perso (GS.Variants.WEAPONS).
 (function () {
+  // modèle pour le créateur de perso (tête, corps et jambes recolorables, voir variants.js)
+  GS.REF_BASES = GS.REF_BASES || {};
+  GS.REF_BASES.vesper = { name: 'Vesper', label: "armure, cheveux longs", art: GS.VESPER_ART, hipF: 4, hipB: -5 };
   let rig = null;
   GS.Vesper = {
     weapon: { weapon: 'pistol', gem: '#2ee1d5', blade: '#4a5060' },

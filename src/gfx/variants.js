@@ -383,6 +383,116 @@
     };
   };
 
+  // ------------------------------------------------------------ style « image »
+  // Personnages assemblés à partir des héros relevés sur image (GS.REF_BASES : Azura, Vesper,
+  // Sakura, Valka...) : la tête (coiffure, visage), le corps (haut, bras, jupe ou tunique) et
+  // les jambes (bas, chaussures) peuvent venir de modèles différents. Chaque matière (cheveux,
+  // peau, yeux, vêtement, dessous, pantalon, chaussures, métal, lumières) est recolorée en
+  // gardant les ombres du dessin d'origine.
+  // spec.ref = { head, top, legs } (noms de modèles) ; couleurs : hair, skin, eyes, jacket,
+  // inner, pants, shoes, metal, gem (lumières) ; arme comme le format de Djegui.
+  const REF_GROUP = { head: 'head', hairBack: 'head', thighF: 'legs', thighB: 'legs', shinF: 'legs', shinB: 'legs', shoe: 'legs' };
+  const REF_COLOR = { hair: 'hair', skin: 'skin', eyes: 'eyes', jacket: 'jacket', inner: 'inner', pants: 'pants', shoes: 'shoes', metal: 'metal', glow: 'gem' };
+  const toHsl = (h) => {
+    const [r, g, b] = U.hexToRgb(h).map((v) => v / 255);
+    const mx = Math.max(r, g, b);
+    const mn = Math.min(r, g, b);
+    const l = (mx + mn) / 2;
+    if (mx === mn) return [0, 0, l];
+    const d = mx - mn;
+    const sat = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+    const hue = (mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4) * 60;
+    return [hue, sat, l];
+  };
+  const fromHsl = (hue, sat, l) => {
+    const k = (n) => (n + hue / 30) % 12;
+    const a = sat * Math.min(l, 1 - l);
+    const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1));
+    return U.rgbToHex(f(0) * 255, f(8) * 255, f(4) * 255);
+  };
+  // Recolore une famille de teintes (même matière) : la couleur choisie prend la place de la
+  // teinte moyenne, les ombres et reflets gardent leur écart de luminosité.
+  const recolorFamily = (cols, target) => {
+    const [th, ts, tl] = toHsl(target);
+    const hs = cols.map(toHsl);
+    const mean = hs.reduce((a, c) => a + c[2], 0) / hs.length;
+    const smean = hs.reduce((a, c) => a + c[1], 0) / hs.length || 1;
+    return hs.map(([, sat, l]) => fromHsl(th, U.clamp(ts * (sat / smean), 0, 1), U.clamp(tl + (l - mean), 0.02, 0.98)));
+  };
+  V.REF_COLOR = REF_COLOR;
+  V.buildRef = (spec) => {
+    const B = GS.REF_BASES;
+    const names = Object.keys(B);
+    const ref = spec.ref || {};
+    const pick = (g) => B[ref[g]] || B[ref.top] || B[names[0]];
+    const src = { head: pick('head'), top: pick('top'), legs: pick('legs') };
+    const pal = { A: '#020102' };
+    let next = 0x5000;
+    // clés de chaque (modèle, groupe) -> clés de la palette commune, couleurs recolorées
+    const maps = {};
+    const family = { A: 'A' };
+    for (const g of ['head', 'top', 'legs']) {
+      const art = src[g].art;
+      const mat = (art.mat && art.mat[g]) || {};
+      const map = {};
+      const fam = {};
+      for (const k of Object.keys(art.pal)) {
+        const m = mat[k];
+        const want = m && spec[REF_COLOR[m]];
+        if (want) (fam[m] = fam[m] || []).push(k);
+        else if (k === 'A') map[k] = 'A';
+      }
+      for (const [m, ks] of Object.entries(fam)) {
+        const cols = recolorFamily(ks.map((k) => art.pal[k]), spec[REF_COLOR[m]]);
+        ks.forEach((k, i) => {
+          const nk = String.fromCharCode(next++);
+          pal[nk] = cols[i];
+          map[k] = nk;
+        });
+      }
+      for (const k of Object.keys(art.pal)) {
+        if (map[k]) continue;
+        const nk = String.fromCharCode(next++);
+        pal[nk] = art.pal[k];
+        map[k] = nk;
+      }
+      for (const [k, nk] of Object.entries(map)) if (nk !== 'A') family[nk] = g + ':' + (mat[k] || '?');
+      maps[g] = map;
+    }
+    const parts = {};
+    for (const g of ['head', 'top', 'legs']) {
+      for (const [n, p] of Object.entries(src[g].art.parts)) {
+        if ((REF_GROUP[n] || 'top') !== g) continue;
+        parts[n] = { pivot: p.pivot, end: p.end, t: p.t.map((row) => [...row].map((c) => (c === '.' ? '.' : maps[g][c])).join('')) };
+      }
+    }
+    const art = { pal, parts, joints: src.top.art.joints };
+    return {
+      art,
+      family,
+      weapon: V.weapon(spec, V.paletteKeys(pal)),
+      hipF: src.legs.hipF,
+      hipB: src.legs.hipB,
+      backArm: src.top.backArm,
+    };
+  };
+  const makeRefChar = (spec) => {
+    const b = V.buildRef(spec);
+    return new GS.ModRig.Char({
+      art: b.art,
+      joints: b.art.joints,
+      weapon: b.weapon,
+      hipF: b.hipF,
+      hipB: b.hipB,
+      outline: 'A',
+      frontArm: 'under',
+      backArm: b.backArm,
+      shadeFamily: b.family,
+      animMap: V.animMapFor(spec),
+    });
+  };
+  V.makeRefChar = makeRefChar;
+
   // Articulations par défaut (doudoune de la fiche).
   const JOINTS = { hip: [14, 41], neck: [14, 15], shoulderF: [24, 19], shoulderB: [5, 20] };
   // Personnage modulaire complet à partir d'une description.
@@ -404,7 +514,10 @@
   // Personnage modulaire à partir d'une description libre (ennemis humains).
   const specArt = {};
   // Nouvelle instance à chaque appel (chaque ennemi perd ses propres membres), art partagé.
-  V.charSpec = (key, spec) => makeChar(specArt[key] || (specArt[key] = V.build(spec)), spec, spec.weapon ? V.animMapFor(spec) : {});
+  V.charSpec = (key, spec) => {
+    if (spec.ref) return makeRefChar(spec);
+    return makeChar(specArt[key] || (specArt[key] = V.build(spec)), spec, spec.weapon ? V.animMapFor(spec) : {});
+  };
 
   // ------------------------------------------------------------ personnages
   const chars2 = {};
@@ -417,7 +530,7 @@
   V.char = (id) => {
     if (chars2[id]) return chars2[id];
     const spec = GS.UNIT[id].rigSpec;
-    chars2[id] = makeChar(V.build(spec), spec, V.animMapFor(spec));
+    chars2[id] = spec.ref ? makeRefChar(spec) : makeChar(V.build(spec), spec, V.animMapFor(spec));
     return chars2[id];
   };
 })();

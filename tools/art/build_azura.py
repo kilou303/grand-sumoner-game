@@ -69,7 +69,18 @@ PIV = {
 }
 
 
+# ------------------------------------------------------------------ matières
+# Clés de la palette par matière, pour chaque groupe de pièces (tête, corps, jambes) :
+# le créateur de perso les recolore et mélange les modèles (voir GS.Variants.buildRef).
+MATERIALS = {
+    'head': {'hair': 'DFKO', 'skin': 'PRSU'},
+    'top': {'jacket': 'BH', 'inner': 'CGJM', 'metal': 'NQT', 'skin': 'PRSU', 'pants': 'EIL', 'hair': 'DFK'},
+    'legs': {'pants': 'EIL', 'shoes': 'CGJM', 'metal': 'NQT'},
+}
+
+
 build({
+    'materials': MATERIALS,
     'name': 'Azura', 'var': 'AZURA_ART', 'src': SRC, 'out': os.path.join(ROOT, 'src', 'gfx', 'azura_art.js'),
     'pitch': 9.65, 'off': (8.75, 9.5), 'floor': 86,
     'face': FACE, 'face_col': FACE_COL, 'cut': CUT, 'joints': JOINTS, 'piv': PIV,

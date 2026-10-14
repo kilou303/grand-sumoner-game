@@ -14,6 +14,7 @@ Chaque script tools/art/build_<héros>.py fournit sa configuration à `build(cfg
   face, face_col         retouches à la main : {ligne: (x0, 'pixels')}, {lettre: couleur}
   cut, joints, piv       découpe en pièces, articulations et pivots (image réduite)
   combine, alias, rotate pièces composées, reprises ou tournées (voir build_parts)
+  materials              {groupe (head, top, legs): {matière: 'clés'}} pour le créateur de perso
   erase                  pixels à effacer après réduction : {ligne: R((x0, x1), ...)}
   keep_edge              zones où le contour sombre extérieur et les pixels isolés sont gardés
                          (mèches de cheveux noirs) : {ligne: R(...)}
@@ -383,7 +384,16 @@ def build(cfg):
         lines.append(f'      {k}: {{ pivot: {json.dumps(p["pivot"])}, end: {json.dumps(p["end"])}, t: [')
         lines += [f"        '{r}'," for r in p['t']]
         lines.append('      ] },')
-    lines += ['    },', '  };', '})();']
+    lines.append('    },')
+    if cfg.get('materials'):
+        # matières : {groupe: {matière: 'clés'}} -> {groupe: {clé: matière}}
+        mat = {g: {k: m for m, ks in ms.items() for k in ks} for g, ms in cfg['materials'].items()}
+        for g, ms in mat.items():
+            bad = [k for k in ms if k not in pal]
+            if bad:
+                raise SystemExit('matières %s : clés absentes de la palette %s' % (g, bad))
+        lines.append('    mat: ' + json.dumps(mat) + ',')
+    lines += ['  };', '})();']
     with open(cfg['out'], 'w', encoding='utf-8') as fh:
         fh.write('\n'.join(lines) + '\n')
     print('écrit', cfg['out'], '%dx%d' % (len(rows[0]), len(rows)), 'pixels non attribués :', left)

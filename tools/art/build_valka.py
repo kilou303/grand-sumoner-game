@@ -64,7 +64,18 @@ PIV = {
     'shoe': ((29, 57), (34, 61)),
 }
 
+# ------------------------------------------------------------------ matières
+# Clés de la palette par matière, pour chaque groupe de pièces (tête, corps, jambes) :
+# le créateur de perso les recolore et mélange les modèles (voir GS.Variants.buildRef).
+MATERIALS = {
+    'head': {'hair': 'TUOI', 'skin': 'LNR', 'eyes': 'WX'},
+    'top': {'jacket': 'DG', 'metal': 'KPQSV', 'skin': 'LNR', 'pants': 'JM'},
+    'legs': {'pants': 'JM', 'shoes': 'EHFC'},
+}
+
+
 build({
+    'materials': MATERIALS,
     'name': 'Valka', 'var': 'VALKA_ART', 'src': SRC, 'out': os.path.join(ROOT, 'src', 'gfx', 'valka_art.js'),
     # image agrandie un peu plus en hauteur qu'en largeur, fond noir, pas de sol
     'pitch': (9.98, 10.14), 'off': (5.75, 7.25), 'bg': 'black',

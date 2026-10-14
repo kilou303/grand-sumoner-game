@@ -137,7 +137,7 @@
     },
     {
       id: 'nyx',
-      rigSpec: { head: 'hood', hood: '#6a44b8', jacket: '#3a2a58', pants: '#1c1828', shoes: '#2a2030', skin: '#f2d6c8', eyes: '#ff3a7a', weapon: 'scythe', blade: '#d8d0ff', gem: '#ff60c0', top: 'hoodie', bottom: 'skirt', shoeType: 'boots' },
+      rigSpec: { ref: { head: 'vesper', top: 'vesper', legs: 'vesper' }, hair: '#3a2a58', skin: '#f2d6c8', eyes: '#ff3a7a', jacket: '#3a2a58', inner: '#6a44b8', pants: '#1c1828', weapon: 'scythe', blade: '#d8d0ff', gem: '#ff60c0' },
       rig: () => GS.Variants.char('nyx'),
       name: 'Nyx',
       title: 'Faucheuse Astrale',
@@ -156,7 +156,7 @@
     },
     {
       id: 'ignara',
-      rigSpec: { head: 'ponytail', hair: '#ff5a2a', jacket: '#b8283a', pants: '#3a1820', shoes: '#f0d8b0', skin: '#f4caa8', eyes: '#ffa020', weapon: 'staff', gem: '#ff8030', top: 'tank', bottom: 'joggers', shoeType: 'hightops' },
+      rigSpec: { ref: { head: 'azura', top: 'azura', legs: 'azura' }, hair: '#ff5a2a', skin: '#f4caa8', jacket: '#b8283a', inner: '#5a2a20', metal: '#e0b060', pants: '#3a1820', shoes: '#f0d8b0', weapon: 'staff', gem: '#ff8030' },
       rig: () => GS.Variants.char('ignara'),
       name: 'Ignara',
       title: 'Reine des Braises',
@@ -175,7 +175,7 @@
     },
     {
       id: 'thalassa',
-      rigSpec: { head: 'long', hair: '#62c0ff', jacket: '#e8f0ff', pants: '#2a4a80', shoes: '#e8f0ff', skin: '#f2d2b8', eyes: '#2a70d0', weapon: 'spear', blade: '#c0f0ff', gem: '#80f0ff', top: 'coat', inner: '#2a4a80', bottom: 'jeans', shoeType: 'boots' },
+      rigSpec: { ref: { head: 'vesper', top: 'azura', legs: 'azura' }, hair: '#62c0ff', skin: '#f2d2b8', eyes: '#2a70d0', jacket: '#e8f0ff', inner: '#2a4a80', metal: '#c0e0ff', pants: '#2a4a80', shoes: '#e8f0ff', weapon: 'spear', blade: '#c0f0ff', gem: '#80f0ff' },
       rig: () => GS.Variants.char('thalassa'),
       name: 'Thalassa',
       title: 'Prêtresse des Marées',
@@ -234,7 +234,7 @@
     },
     {
       id: 'mira',
-      rigSpec: { head: 'bob', hair: '#f4d468', jacket: '#ece4cc', pants: '#5a4430', shoes: '#f0f0e0', skin: '#f4d0b0', eyes: '#40a0e0', weapon: 'bow', top: 'tshirt', print: 'heart', printColor: '#e05070', bottom: 'shorts', shoeType: 'hightops' },
+      rigSpec: { ref: { head: 'sakura', top: 'valka', legs: 'valka' }, hair: '#f4d468', skin: '#f4d0b0', eyes: '#40a0e0', jacket: '#ece4cc', metal: '#c8b890', pants: '#5a4430', shoes: '#f0f0e0', weapon: 'bow' },
       rig: () => GS.Variants.char('mira'),
       name: 'Mira',
       title: 'Archère du Vent',
@@ -291,7 +291,7 @@
     },
     {
       id: 'coralie',
-      rigSpec: { head: 'twintails', hair: '#40c8c8', jacket: '#2060a8', pants: '#203a6a', shoes: '#3a2a20', skin: '#f4d0b8', eyes: '#20a0a0', weapon: 'rapier', gem: '#ff6080', top: 'uniform', accent: '#f0d060', bottom: 'skirt', shoeType: 'loafers' },
+      rigSpec: { ref: { head: 'sakura', top: 'sakura', legs: 'sakura' }, hair: '#40c8c8', skin: '#f4d0b8', eyes: '#20a0a0', jacket: '#f0f4ff', inner: '#2060a8', pants: '#203a6a', shoes: '#3a2a20', weapon: 'rapier', gem: '#ff6080' },
       rig: () => GS.Variants.char('coralie'),
       name: 'Coralie',
       title: 'Duelliste des Flots',
@@ -331,7 +331,7 @@
     },
     {
       id: 'lina',
-      rigSpec: { head: 'bob', hair: '#f8e090', jacket: '#f4ece8', pants: '#c890b0', shoes: '#ffffff', skin: '#f6d6c0', eyes: '#e070a0', weapon: 'staff', gem: '#ffe0f0', bottom: 'skirt' },
+      rigSpec: { ref: { head: 'sakura', top: 'sakura', legs: 'sakura' }, hair: '#f8e090', skin: '#f6d6c0', eyes: '#e070a0', jacket: '#f4ece8', inner: '#c890b0', pants: '#f4ece8', shoes: '#ffffff', weapon: 'staff', gem: '#ffe0f0' },
       rig: () => GS.Variants.char('lina'),
       name: 'Lina',
       title: 'Novice du Temple',
@@ -446,7 +446,7 @@
     },
     {
       id: 'yuna',
-      rigSpec: { head: 'twintails', hair: '#c02040', top: 'uniform', jacket: '#1a1e3a', accent: '#e8c048', bottom: 'skirt', pants: '#1a1e3a', shoeType: 'loafers', shoes: '#1a1418', skin: '#f4d2b8', eyes: '#ff4060', weapon: 'katana', blade: '#ffd0d8', gem: '#ff4060' },
+      rigSpec: { ref: { head: 'sakura', top: 'sakura', legs: 'sakura' }, hair: '#c02040', skin: '#f4d2b8', eyes: '#ff4060', jacket: '#f0f0f8', inner: '#1a1e3a', pants: '#1a1418', shoes: '#1a1418', weapon: 'katana', blade: '#ffd0d8', gem: '#ff4060' },
       rig: () => GS.Variants.char('yuna'),
       name: 'Yuna',
       title: 'Lame Pourpre',
@@ -484,7 +484,7 @@
     },
     {
       id: 'iris',
-      rigSpec: { head: 'bob', hair: '#3a7ac8', acc: ['glasses'], top: 'hoodie', jacket: '#2a2a34', accent: '#40e0ff', bottom: 'skirt', pants: '#3a2a40', shoeType: 'boots', shoes: '#1a1418', skin: '#f2d6c4', eyes: '#40a0e0', weapon: 'staff', gem: '#40e0ff' },
+      rigSpec: { ref: { head: 'sakura', top: 'sakura', legs: 'sakura' }, hair: '#3a7ac8', skin: '#f2d6c4', eyes: '#40a0e0', jacket: '#2a2a34', inner: '#3a2a40', pants: '#1a1418', shoes: '#1a1418', weapon: 'staff', gem: '#40e0ff' },
       rig: () => GS.Variants.char('iris'),
       name: 'Iris',
       title: 'Hackeuse Maudite',
@@ -541,7 +541,7 @@
     },
     {
       id: 'nina',
-      rigSpec: { head: 'ponytail', hair: '#2a1a12', acc: ['headband'], band: '#c02030', top: 'jacket', jacket: '#1a1a1a', inner: '#c02030', bottom: 'jeans', pants: '#2a3a5a', shoeType: 'boots', shoes: '#1a1418', skin: '#d8a888', eyes: '#5a3020', weapon: 'dagger', blade: '#d0d8e0' },
+      rigSpec: { ref: { head: 'azura', top: 'vesper', legs: 'azura' }, hair: '#2a1a12', skin: '#d8a888', eyes: '#5a3020', jacket: '#1a1a1a', inner: '#c02030', pants: '#2a3a5a', shoes: '#1a1418', weapon: 'dagger', blade: '#d0d8e0', gem: '#c02030' },
       rig: () => GS.Variants.char('nina'),
       name: 'Nina',
       title: 'Cheffe de Gang',

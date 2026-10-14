@@ -252,5 +252,6 @@
         'CLRRNNA.......',
       ] },
     },
+    mat: {"head": {"T": "hair", "U": "hair", "O": "hair", "I": "hair", "L": "skin", "N": "skin", "R": "skin", "W": "eyes", "X": "eyes"}, "top": {"D": "jacket", "G": "jacket", "K": "metal", "P": "metal", "Q": "metal", "S": "metal", "V": "metal", "L": "skin", "N": "skin", "R": "skin", "J": "pants", "M": "pants"}, "legs": {"J": "pants", "M": "pants", "E": "shoes", "H": "shoes", "F": "shoes", "C": "shoes"}},
   };
 })();

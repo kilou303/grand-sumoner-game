@@ -4,6 +4,9 @@
 // Vue de l'autre trois-quarts : bras arrière devant le torse, bras avant derrière ; au repos
 // elle garde la garde de son image.
 (function () {
+  // modèle pour le créateur de perso (tête, corps et jambes recolorables, voir variants.js)
+  GS.REF_BASES = GS.REF_BASES || {};
+  GS.REF_BASES.valka = { name: 'Valka', label: "débardeur et épaulières, cheveux courts", art: GS.VALKA_ART, hipF: 4, hipB: -5, backArm: 'front' };
   let rig = null;
   GS.Valka = {
     rig: () => {

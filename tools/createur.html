@@ -35,7 +35,7 @@
 <body>
 <div id="side">
   <h1>Créateur de perso</h1>
-  <div class="sub">Format de Djegui : tête, haut, bas, chaussures, accessoires, arme.</div>
+  <div class="sub">Style image : tête, corps et jambes pris sur les héros relevés sur image, recolorés. Format de Djegui : l'ancien style, pièce par pièce.</div>
   <div id="form"></div>
 </div>
 <div id="main">
@@ -56,6 +56,14 @@
 <script src="../src/gfx/djegui_art.js"></script>
 <script src="../src/gfx/heads.js"></script>
 <script src="../src/gfx/outfits.js"></script>
+<script src="../src/gfx/azura_art.js"></script>
+<script src="../src/gfx/azura.js"></script>
+<script src="../src/gfx/vesper_art.js"></script>
+<script src="../src/gfx/vesper.js"></script>
+<script src="../src/gfx/sakura_art.js"></script>
+<script src="../src/gfx/sakura.js"></script>
+<script src="../src/gfx/valka_art.js"></script>
+<script src="../src/gfx/valka.js"></script>
 <script src="../src/gfx/variants.js"></script>
 <script src="../src/gfx/gore.js"></script>
 <script>
@@ -68,24 +76,29 @@
   const PRINTS = [['', 'Aucun'], ['stripes', 'Rayures']].concat(Object.keys(O.PRINTS).map((k) => [k, k]));
   const ACCS = Object.keys(O.HEAD_ACC).map((k) => [k, O.HEAD_ACC[k].label]).concat([['elf', "Oreilles d'elfe"]]);
 
-  // Champs du formulaire : [clé, libellé, type, options]
+  // modèles relevés sur image (Azura, Vesper, Sakura, Valka...)
+  const BASES = Object.entries(GS.REF_BASES).map(([k, b]) => [k, `${b.name} (${b.label})`]);
+  const STYLES = [['image', 'Image (comme les héros relevés)'], ['djegui', 'Format de Djegui (ancien)']];
+  // Champs du formulaire : [clé, libellé, type, options, style] (style : seulement pour ce style)
   const GROUPS = [
-    ['Tête', [['head', 'Coiffure', 'sel', HEADS], ['hair', 'Cheveux', 'col'], ['hood', 'Capuche', 'col'], ['skin', 'Peau', 'col'], ['eyes', 'Yeux', 'col'], ['acc', 'Accessoires', 'multi', ACCS], ['band', 'Bandeau', 'col']]],
-    ['Haut', [['top', 'Type', 'sel', opts(O.TOPS)], ['jacket', 'Couleur', 'col'], ['inner', 'Dessous', 'col'], ['accent', 'Détails', 'col'], ['print', 'Imprimé', 'sel', PRINTS], ['printColor', "Couleur imp.", 'col'], ['gloves', 'Gants', 'col?']]],
-    ['Bas', [['bottom', 'Type', 'sel', opts(O.BOTTOMS)], ['pants', 'Couleur', 'col'], ['belt', 'Ceinture', 'col?']]],
-    ['Chaussures', [['shoeType', 'Type', 'sel', opts(O.SHOES)], ['shoes', 'Couleur', 'col'], ['sole', 'Semelle', 'col?']]],
-    ['Arme', [['weapon', 'Arme', 'sel', WEAPONS], ['blade', 'Lame', 'col?'], ['gem', 'Gemme', 'col?']]],
+    ['Style', [['style', 'Style', 'sel', STYLES], ['refHead', 'Tête de', 'sel', BASES, 'image'], ['refTop', 'Corps de', 'sel', BASES, 'image'], ['refLegs', 'Jambes de', 'sel', BASES, 'image']]],
+    ['Tête', [['head', 'Coiffure', 'sel', HEADS, 'djegui'], ['hair', 'Cheveux', 'col'], ['hood', 'Capuche', 'col', null, 'djegui'], ['skin', 'Peau', 'col'], ['eyes', 'Yeux', 'col'], ['acc', 'Accessoires', 'multi', ACCS, 'djegui'], ['band', 'Bandeau', 'col', null, 'djegui']]],
+    ['Haut', [['top', 'Type', 'sel', opts(O.TOPS), 'djegui'], ['jacket', 'Couleur', 'col'], ['inner', 'Dessous', 'col'], ['metal', 'Métal', 'col', null, 'image'], ['accent', 'Détails', 'col', null, 'djegui'], ['print', 'Imprimé', 'sel', PRINTS, 'djegui'], ['printColor', "Couleur imp.", 'col', null, 'djegui'], ['gloves', 'Gants', 'col?', null, 'djegui']]],
+    ['Bas', [['bottom', 'Type', 'sel', opts(O.BOTTOMS), 'djegui'], ['pants', 'Couleur', 'col'], ['belt', 'Ceinture', 'col?', null, 'djegui']]],
+    ['Chaussures', [['shoeType', 'Type', 'sel', opts(O.SHOES), 'djegui'], ['shoes', 'Couleur', 'col'], ['sole', 'Semelle', 'col?', null, 'djegui']]],
+    ['Arme', [['weapon', 'Arme', 'sel', WEAPONS], ['blade', 'Lame', 'col?'], ['gem', 'Gemme / lumières', 'col?']]],
   ];
-  const spec = { head: 'short', hair: '#2a1a12', hood: '#e8e4ec', skin: '#c88a60', eyes: '#402010', acc: [], band: '#c02030', top: 'tshirt', jacket: '#e8e4ec', inner: '#1a1a1a', accent: '#e8c048', print: 'skull', printColor: '#1a1418', bottom: 'jeans', pants: '#3a5a8a', shoeType: 'sneakers', shoes: '#f0f0f4', weapon: '' };
+  const spec = { style: 'image', refHead: BASES[0][0], refTop: BASES[0][0], refLegs: BASES[0][0], metal: '#a0a0a8', head: 'short', hair: '#2a1a12', hood: '#e8e4ec', skin: '#c88a60', eyes: '#402010', acc: [], band: '#c02030', top: 'tshirt', jacket: '#e8e4ec', inner: '#1a1a1a', accent: '#e8c048', print: 'skull', printColor: '#1a1418', bottom: 'jeans', pants: '#3a5a8a', shoeType: 'sneakers', shoes: '#f0f0f4', weapon: '' };
   const on = {};
 
   const form = document.getElementById('form');
   for (const [title, fields] of GROUPS) {
     const fs = document.createElement('fieldset');
     fs.innerHTML = `<legend>${title}</legend>`;
-    for (const [key, label, type, list] of fields) {
+    for (const [key, label, type, list, only] of fields) {
       const row = document.createElement('div');
       row.className = 'row';
+      if (only) row.dataset.only = only;
       row.innerHTML = `<label>${label}</label>`;
       if (type === 'sel') {
         const s = document.createElement('select');
@@ -130,8 +143,17 @@
     form.append(fs);
   }
 
+  // Lignes du formulaire propres à un style : cachées pour l'autre.
+  const showStyle = () => document.querySelectorAll('[data-only]').forEach((r) => (r.style.display = r.dataset.only === spec.style ? '' : 'none'));
   // Description propre (sans les champs inutiles) à coller dans units.js.
   const clean = () => {
+    if (spec.style === 'image') {
+      const s = { ref: { head: spec.refHead, top: spec.refTop, legs: spec.refLegs } };
+      for (const k of ['hair', 'skin', 'eyes', 'jacket', 'inner', 'metal', 'pants', 'shoes']) s[k] = spec[k];
+      if (spec.weapon) s.weapon = spec.weapon;
+      for (const k of ['blade', 'gem']) if (on[k]) s[k] = spec[k];
+      return s;
+    }
     const s = {};
     const keep = (k) => {
       if (k === 'hood') return spec.head === 'hood';
@@ -145,17 +167,18 @@
       if (k === 'weapon') return !!spec.weapon;
       return true;
     };
-    for (const k of Object.keys(spec)) if (keep(k)) s[k] = spec[k];
+    for (const k of Object.keys(spec)) if (keep(k) && !['style', 'refHead', 'refTop', 'refLegs', 'metal'].includes(k)) s[k] = spec[k];
     if (s.belt) s.belt = spec.belt;
     return s;
   };
-  const toJs = (o) => '{ ' + Object.entries(o).map(([k, v]) => `${k}: ${Array.isArray(v) ? '[' + v.map((x) => `'${x}'`).join(', ') + ']' : `'${v}'`}`).join(', ') + ' }';
+  const toJs = (o) => '{ ' + Object.entries(o).map(([k, v]) => `${k}: ${Array.isArray(v) ? '[' + v.map((x) => `'${x}'`).join(', ') + ']' : typeof v === 'object' ? toJs(v) : `'${v}'`}`).join(', ') + ' }';
 
   let rig = null;
   function rebuild() {
     const s = clean();
+    showStyle();
     try {
-      rig = V.makeChar(V.build(s), s, V.animMapFor(s));
+      rig = s.ref ? V.makeRefChar(s) : V.makeChar(V.build(s), s, V.animMapFor(s));
     } catch (e) {
       console.error(e);
     }
@@ -185,9 +208,14 @@
     const t = (now - t0) / 1000;
     ctx.fillStyle = '#1a1528';
     ctx.fillRect(0, 0, c.width, c.height);
-    const Z = 3;
-    const cw = 60 * Z;
-    const chh = 74 * Z;
+    // cadre de l'image du rig montré (assez large pour les héros relevés sur image)
+    const SX = 8;
+    const SY = 6;
+    const SW = 80;
+    const SH = 84;
+    const Z = 2.5;
+    const cw = SW * Z;
+    const chh = SH * Z;
     ctx.font = '13px system-ui';
     ROWS.forEach((row, ry) =>
       row.forEach(([a0, label], rx) => {
@@ -200,13 +228,13 @@
           tt = t % d;
         }
         const f = rig.anim(a, tt);
-        const x = 12 + rx * (cw + 54);
+        const x = 12 + rx * (cw + 34);
         const y = 8 + ry * (chh + 8);
         ctx.fillStyle = '#231d36';
-        ctx.fillRect(x, y, cw + 40, chh);
+        ctx.fillRect(x, y, cw + 20, chh);
         ctx.fillStyle = '#9a90b8';
         ctx.fillText(label, x + 6, y + 16);
-        ctx.drawImage(f.canvas, 16, 14, 60, 74, x + 20, y, cw, chh);
+        ctx.drawImage(f.canvas, SX, SY, SW, SH, x + 10, y, cw, chh);
       })
     );
     requestAnimationFrame(frame);
@@ -228,6 +256,8 @@
     if (el) el.value = v;
   };
   document.getElementById('rand').onclick = () => {
+    for (const k of ['refHead', 'refTop', 'refLegs']) set(k, pick(BASES)[0]);
+    set('metal', randCol(0.3, [0.4, 0.85]));
     set('head', pick(HEADS.filter((h) => h[0] !== 'mask' && h[0] !== 'helmet'))[0]);
     set('hair', pick(['#1a1410', '#2a1a12', '#5a3a22', '#d8a040', '#f0f0f8', '#c02040', '#3a7ac8', '#ff80c0', '#40c8c8', randCol(0.8, [0.3, 0.7])]));
     set('hood', randCol(0.4, [0.2, 0.9]));

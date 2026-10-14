@@ -124,14 +124,17 @@
       this.lostKey = '';
       // palette assombrie pour les membres arrière (profondeur) : couleur la plus proche
       // d'une version assombrie de chaque teinte (garde la même famille de couleur)
+      // spec.shadeFamily : clé -> famille (même matière) où chercher la teinte assombrie
       const pal = spec.art.pal;
       const keys = Object.keys(pal);
+      const fam = spec.shadeFamily;
       this.shade = {};
       for (const k of keys) {
         const target = U.hexToRgb(U.shade(pal[k], -0.22));
         let best = k;
         let bd = 1e9;
         for (const k2 of keys) {
+          if (fam && fam[k2] !== fam[k]) continue;
           const c = U.hexToRgb(pal[k2]);
           const d = (c[0] - target[0]) ** 2 + (c[1] - target[1]) ** 2 + (c[2] - target[2]) ** 2;
           if (d < bd) {

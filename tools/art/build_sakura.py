@@ -73,7 +73,18 @@ PIV = {
     'shoe': ((17, 54), (20, 57)),
 }
 
+# ------------------------------------------------------------------ matières
+# Clés de la palette par matière, pour chaque groupe de pièces (tête, corps, jambes) :
+# le créateur de perso les recolore et mélange les modèles (voir GS.Variants.buildRef).
+MATERIALS = {
+    'head': {'hair': 'ILPT', 'skin': 'SNK', 'eyes': 'WX'},
+    'top': {'jacket': 'MOQRUV', 'inner': 'BDFH', 'skin': 'SNK'},
+    'legs': {'skin': 'SNK', 'pants': 'CE', 'shoes': 'G'},
+}
+
+
 build({
+    'materials': MATERIALS,
     'name': 'Sakura', 'var': 'SAKURA_ART', 'src': SRC, 'out': os.path.join(ROOT, 'src', 'gfx', 'sakura_art.js'),
     'pitch': 9.65, 'off': (8.5, 9.5), 'floor': 88,
     # chemise blanche : pas de trous de fond à retirer à l'intérieur du personnage

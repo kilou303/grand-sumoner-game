@@ -26,7 +26,8 @@
   const ctx = c.getContext('2d'); ctx.imageSmoothingEnabled = false;
   ctx.fillStyle = '#1c1830'; ctx.fillRect(0, 0, c.width, c.height);
   const RIGS = { azura: GS.Azura, vesper: GS.Vesper, sakura: GS.Sakura, valka: GS.Valka };
-  const ch = (RIGS[q.get('c')] || GS.Djegui).rig();
+  // ?spec={...} : perso du créateur (style image si spec.ref)
+  const ch = q.get('spec') ? GS.Variants.charSpec('apercu', JSON.parse(q.get('spec'))) : (RIGS[q.get('c')] || GS.Djegui).rig();
   let y = 6;
   const row = (label, frames) => {
     let x = 70;
