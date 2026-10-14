@@ -56,6 +56,23 @@
         F().draw('+' + U.fmt(v), 180, y, { color: ic === 'gem' ? '#a0e0ff' : '#ffe080', align: 'right' });
       });
       F().draw(`XP +${r.xp} par héros`, 30, 156, { color: '#c0ff90' });
+      // équipements trouvés
+      if (this.t > 1.2) {
+        const items = r.items || [];
+        R.panel(20, 176, 170, 38, { cut: 6 });
+        F().draw(items.length ? `ÉQUIPEMENTS (${items.length})` : 'AUCUN ÉQUIPEMENT', 30, 181, { color: items.length ? '#c070ff' : R.COL.dim });
+        items.slice(0, 7).forEach((it, i) => GS.UI.itemIcon(it.id, 28 + i * 22, 191, { size: 18 }));
+        if (items.length > 7) F().draw('+' + (items.length - 7), 184, 197, { color: '#ffffff', align: 'right' });
+        const best = items.slice().sort((a, b) => GS.Equip.rank(b.id) - GS.Equip.rank(a.id))[0];
+        if (best && items.length <= 3) {
+          const nx = 28 + items.length * 22 + 2;
+          F().draw(GS.UI.fitText(GS.EQUIPS[best.id].name, 186 - nx), nx, 197, { color: GS.Equip.color(best.id) });
+        }
+        if (best && !this.played.item) {
+          this.played.item = true;
+          GS.Audio.sfx(GS.Equip.rank(best.id) >= 2 ? 'rare' : 'star');
+        }
+      }
       // expérience des héros
       const k = U.clamp((this.t - 1.4) / 1.4, 0, 1);
       r.ups.forEach((up, i) => {

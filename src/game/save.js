@@ -18,6 +18,9 @@
     totalPulls: 0,
     firstMulti: true,
     lastGift: null,
+    items: [],
+    nextItemUid: 1,
+    shop: null,
     settings: { muted: false, speed: 1, auto: false },
     stats: { battles: 0, wins: 0 },
   });
@@ -29,6 +32,7 @@
     } catch (err) {
       d = null;
     }
+    let kit = !d || d.v !== 1 || !d.items;
     if (!d || d.v !== 1) {
       d = S.fresh();
       GS.data = d;
@@ -38,6 +42,7 @@
       S.save();
     }
     GS.data = Object.assign(S.fresh(), d);
+    GS.data.items = GS.data.items.filter((it) => GS.EQUIPS[it.id]);
     GS.data.settings = Object.assign(S.fresh().settings, d.settings || {});
     // Nettoie les unités inconnues (si les données du jeu changent).
     GS.data.units = GS.data.units.filter((u) => GS.UNIT[u.id]);
@@ -46,7 +51,15 @@
     // Héros de départ ajoutés après la création de la sauvegarde.
     const missing = GS.UNITS.filter((u) => u.starter && !S.ownedById(u.id));
     for (const u of missing) S.addUnit(u.id);
-    if (missing.length) S.save();
+    // Équipement de départ (nouvelle partie ou sauvegarde d'avant l'équipement), porté par le chef.
+    if (kit) {
+      const lead = S.teamUnits()[0];
+      for (const id of ['couteau', 'blouson', 'bracelet']) {
+        const it = GS.Equip.add(id);
+        if (lead) GS.Equip.equip(lead, it.uid);
+      }
+    }
+    if (missing.length || kit) S.save();
     return GS.data;
   };
 
@@ -107,8 +120,33 @@
 
   S.trainCost = (u) => 60 + u.level * 45;
 
-  S.stats = (u) => GS.unitStats(GS.UNIT[u.id], u.level, u.awaken);
-  S.power = (u) => GS.unitPower(GS.UNIT[u.id], u.level, u.awaken);
+  // Passifs d'un héros : innés (débloqués selon le niveau) puis ceux de son équipement.
+  S.passivesOf = (u) => {
+    const def = GS.UNIT[u.id];
+    const out = (def.passives || []).map((id, i) => ({ id, src: 'innate', need: GS.Passives.UNLOCK[i], locked: u.level < GS.Passives.UNLOCK[i] }));
+    const eq = GS.Equip.of(u);
+    for (const sl of GS.SLOTS) if (eq[sl.id]) out.push({ id: GS.EQUIPS[eq[sl.id].id].passive, src: sl.id, item: eq[sl.id] });
+    return out;
+  };
+  S.activePassives = (u) => S.passivesOf(u).filter((p) => !p.locked).map((p) => p.id);
+
+  // Stats finales : base (niveau, éveil) + équipement, puis bonus en % des passifs.
+  S.stats = (u) => {
+    const st = GS.unitStats(GS.UNIT[u.id], u.level, u.awaken);
+    for (const it of Object.values(GS.Equip.of(u))) if (it) for (const [k, v] of Object.entries(GS.Equip.stats(it))) st[k] += v;
+    const m = GS.Passives.mods(S.activePassives(u));
+    const g = (k) => m[k] || 0;
+    st.hp = Math.round(st.hp * (1 + g('hp')));
+    st.atk = Math.round(st.atk * (1 + g('atk')));
+    st.def = Math.round(st.def * (1 + g('def')));
+    st.spd += g('spd');
+    st.mp += g('mp');
+    return st;
+  };
+  S.power = (u) => {
+    const s = S.stats(u);
+    return Math.round(s.hp * 0.25 + s.atk * 2.2 + s.def * 1.5 + s.spd * 3 + S.activePassives(u).length * 40);
+  };
   S.teamPower = () => S.teamUnits().reduce((s, u) => s + S.power(u), 0);
 
   S.canClaimGift = () => GS.data.lastGift !== today();

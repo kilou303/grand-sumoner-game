@@ -73,6 +73,11 @@
       UI().rays(96, 150, el.color, this.t, 12, 200, 0.1);
       R.ellipse(96, 232, 36, 6, 'rgba(0,0,0,0.45)');
       GS.Art.drawUnit(def, 96, 232, { scale: 2, anim: 'idle', t: this.t });
+      const nPas = GS.Save.activePassives(u).length;
+      if (UI().button(`ÉQUIPEMENT · ${nPas} PASSIFS`, 12, 244, 168, 18, { id: 'd_eq', color: '#c070ff' })) {
+        GS.go(new GS.EquipScene(u, () => new GS.UnitsScene(this.back)));
+        return;
+      }
       if (UI().topBar(def.name, { back: true })) {
         this.detail = null;
         return;

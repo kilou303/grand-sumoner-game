@@ -93,7 +93,7 @@
       this.auto = !!GS.data.settings.auto;
       this.speed = GS.data.settings.speed || 1;
       this.paused = false;
-      this.loot = { gold: 0, gems: 0 };
+      this.loot = { gold: 0, gems: 0, items: [] };
       this.stolen = 0;
       this.cutin = null;
       this.lastTarget = null;
@@ -280,7 +280,11 @@
       if (this.wave === 0 || !this.ctInit) {
         B.initCT(this.fighters);
         this.ctInit = true;
-      } else B.initCT(this.enemies);
+        yield* this.startPassives(this.fighters);
+      } else {
+        B.initCT(this.enemies);
+        yield* this.startPassives(this.enemies);
+      }
       const res = yield* this.fightLoop();
       if (res === 'defeat') {
         yield* this.defeat();
@@ -298,6 +302,56 @@
       this.spawnGroup(this.groupIdx + 1);
       this.mode = 'explore';
       this.hint = 0;
+    }
+
+    // Passifs de début de combat : statuts offerts et initiative.
+    *startPassives(list) {
+      let any = false;
+      for (const f of list) {
+        if (!f.alive) continue;
+        if (f.p('ct')) f.ct *= Math.max(0.1, 1 - f.p('ct'));
+        for (const [type, turns] of f.pm.start) {
+          if (B.addStatus(f, { type, turns, chance: 1 }, f)) {
+            any = true;
+            this.fx.pop(f.cx, f.topY - 10, GS.STATUS[type].name, { color: GS.STATUS[type].color, dur: 1.1 });
+          }
+        }
+      }
+      if (any) {
+        A().sfx('buff');
+        yield 0.5;
+      }
+    }
+
+    // Nom d'un passif qui se déclenche, au-dessus du combattant.
+    passivePop(f, id, text) {
+      this.fx.pop(f.cx, f.topY - 18, text || GS.PASSIVES[id].name, { color: GS.Passives.color(id, this.t), dur: 1.1 });
+    }
+    passiveWith(f, key) {
+      return f.passives.find((id) => GS.PASSIVES[id] && GS.PASSIVES[id].fx[key]);
+    }
+
+    // Ennemi vaincu : effets « à l'élimination » et butin d'équipement.
+    onKill(f, tgt) {
+      if (f && f.alive && f !== tgt) {
+        if (f.p('killHeal')) {
+          const v = Math.min(Math.round(f.maxHp * f.p('killHeal')), f.maxHp - f.hp);
+          if (v > 0) {
+            f.hp += v;
+            this.fx.pop(f.cx, f.topY, '+' + v, { color: '#70ff90' });
+          }
+        }
+        if (f.p('killSp') && f.isHero) f.sp = Math.min(100, f.sp + f.p('killSp'));
+      }
+      if (tgt.isHero || tgt.dropDone) return;
+      tgt.dropDone = true;
+      if (Math.random() >= GS.Equip.dropChance(tgt.boss)) return;
+      const id = GS.Equip.roll(GS.Equip.dropWeights(this.stage.level, tgt.boss));
+      this.loot.items.push(id);
+      const def = GS.EQUIPS[id];
+      this.fx.pop(tgt.cx, tgt.topY - 22, def.name, { color: GS.Equip.color(id), label: 'ÉQUIPEMENT !', labelColor: '#ffffff', dur: 1.6 });
+      this.fx.sparkle(tgt.cx, tgt.cy, { color: GS.Equip.color(id), size: 18 });
+      A().sfx(GS.Equip.rank(id) >= 2 ? 'rare' : 'star');
     }
 
     *runTo(f, x, y, speed = 240) {
@@ -330,7 +384,7 @@
     }
 
     *takeTurn(f) {
-      if (f.isHero) f.mp = Math.min(f.maxMp, f.mp + 5);
+      if (f.isHero) f.mp = Math.min(f.maxMp, f.mp + 5 + f.p('mpRegen'));
       for (const ev of B.tickStatuses(f)) {
         if (ev.type === 'regen') {
           const v = Math.min(ev.amount, f.maxHp - f.hp);
@@ -349,6 +403,7 @@
         yield 0.35;
         if (f.hp <= 0) {
           f.alive = false;
+          this.onKill(null, f);
           yield* this.koAnim(f);
           return;
         }
@@ -447,8 +502,8 @@
       if (f.isHero) {
         const g = { attack: [15, 25, 10], skill: [0, 12, 10], special: [0, 0, 25], overlimit: [0, 0, 0] }[cmd.type] || [0, 0, 0];
         f.mp = Math.min(f.maxMp, f.mp + g[0]);
-        f.sp = Math.min(100, f.sp + g[1]);
-        f.sl = Math.min(100, f.sl + g[2]);
+        f.sp = Math.min(100, f.sp + g[1] * (1 + f.p('sp')));
+        f.sl = Math.min(100, f.sl + g[2] * (1 + f.p('sl')));
       }
       this.dim = 0;
       yield 0.12;
@@ -496,7 +551,10 @@
         let any = false;
         for (const t of list) {
           if (!t.alive) continue;
-          if (B.addStatus(t, eff, f)) {
+          t.resisted = false;
+          const ok = B.addStatus(t, eff, f);
+          if (t.resisted) this.passivePop(t, this.passiveWith(t, 'resist'), 'RÉSISTE !');
+          if (ok) {
             any = true;
             const st = GS.STATUS[eff.type];
             this.fx.pop(t.cx, t.topY - 10, st.name, { color: st.color, dur: 1.1 });
@@ -520,7 +578,31 @@
     strike(f, tgt, ab, frac, o = {}) {
       if (!tgt || !tgt.alive) return null;
       const r = B.damage(f, tgt, ab, frac);
+      if (r.miss) {
+        this.fx.pop(tgt.cx + U.rand(-6, 6), tgt.topY + 4, 'ESQUIVE', { color: '#c0f0ff' });
+        tgt.kx = (tgt.isHero ? -1 : 1) * 6;
+        if (!o.silent) A().sfx('select');
+        return r;
+      }
       tgt.hp = Math.max(0, tgt.hp - r.dmg);
+      // ténacité : survit une fois avec 1 PV
+      if (tgt.hp <= 0 && tgt.gutsLeft > 0) {
+        tgt.gutsLeft--;
+        tgt.hp = 1;
+        this.passivePop(tgt, this.passiveWith(tgt, 'guts'), 'TÉNACITÉ !');
+      }
+      // vol de vie et épines
+      if (f.p('drain') && f.alive) {
+        const v = Math.min(Math.round(r.dmg * f.p('drain')), f.maxHp - f.hp);
+        if (v > 0) f.hp += v;
+      }
+      if (tgt.p('thorns') && f.alive && f !== tgt) {
+        const v = Math.round(r.dmg * tgt.p('thorns'));
+        if (v > 0) {
+          f.hp = Math.max(1, f.hp - v);
+          this.fx.pop(f.cx, f.topY, v, { color: '#c0a0ff', scale: 0.8 });
+        }
+      }
       tgt.flash = 1;
       tgt.flashColor = '#ffffff';
       tgt.kx = (tgt.isHero ? -1 : 1) * (r.crit ? 7 : 4) * (o.knock || 1);
@@ -558,8 +640,8 @@
       this.hitstop = Math.max(this.hitstop, r.crit ? 0.1 : 0.045);
       if (!o.silent) A().sfx(r.crit ? 'crit' : 'hit');
       if (tgt.isHero) {
-        tgt.sp = Math.min(100, tgt.sp + 5);
-        tgt.sl = Math.min(100, tgt.sl + 4);
+        tgt.sp = Math.min(100, tgt.sp + 5 * (1 + tgt.p('sp')));
+        tgt.sl = Math.min(100, tgt.sl + 4 * (1 + tgt.p('sl')));
       }
       if (ab.steal && f.isHero && Math.random() < 0.6) {
         const g = U.randInt(20, 60) * (1 + Math.floor(this.stage.level / 4));
@@ -570,7 +652,8 @@
       this.bleed(f, tgt, r, big);
       if (tgt.hp <= 0) {
         tgt.alive = false;
-        if (f.isHero) f.sl = Math.min(100, f.sl + 10);
+        if (f.isHero) f.sl = Math.min(100, f.sl + 10 * (1 + f.p('sl')));
+        this.onKill(f, tgt);
         this.co.run(this.koAnim(tgt));
       } else if ((tgt.cuts || 0) < 2) {
         // coups violents : un membre peut être tranché
@@ -1217,7 +1300,10 @@
       const rw = GS.stageRewards(this.stage);
       const first = !d.cleared[id];
       d.cleared[id] = true;
-      d.gold += rw.gold + this.stolen + this.loot.gold;
+      const goldBonus = Math.min(0.5, this.heroes.reduce((a, h) => a + h.p('gold'), 0));
+      const qGold = Math.round(rw.gold * (1 + goldBonus));
+      d.gold += qGold + this.stolen + this.loot.gold;
+      const items = this.loot.items.map((id) => GS.Equip.add(id));
       d.gems += (first ? rw.firstGems : 0) + this.loot.gems;
       d.stats.battles++;
       d.stats.wins++;
@@ -1227,7 +1313,7 @@
         return { uid: u.uid, before, gained };
       });
       GS.Save.save();
-      GS.go(new GS.ResultScene({ win: true, ai: this.ai, si: this.si, gold: rw.gold, stolen: this.stolen, loot: this.loot, gems: first ? rw.firstGems : 0, xp: rw.xp, ups, first }));
+      GS.go(new GS.ResultScene({ win: true, ai: this.ai, si: this.si, gold: qGold, items, stolen: this.stolen, loot: this.loot, gems: first ? rw.firstGems : 0, xp: rw.xp, ups, first }));
     }
 
     *defeat() {
@@ -1762,6 +1848,27 @@
       F().draw(t.name, x, by - 11, { color: '#ffffff', outline: '#000', align: 'center' });
     }
 
+    // Liste des passifs d'un combattant (cadre centré en (cx, y)).
+    drawPassiveBox(f, cx, y) {
+      if (!f.passives.length) return;
+      const P = GS.Passives;
+      const rows = f.passives.map((id) => [GS.PASSIVES[id].name, P.desc(id), P.color(id, this.t)]);
+      const w = Math.min(W() - 20, Math.max(...rows.map(([n, d]) => F().width(n) + F().width(d) + 14)) + 10);
+      const h = 12 + rows.length * 9;
+      R.panel(Math.round(cx - w / 2), y, w, h, { cut: 4 });
+      F().draw('PASSIFS · ' + f.name, cx, y + 3, { color: R.COL.cyan, align: 'center' });
+      rows.forEach(([n, d, col], i) => {
+        const ly = y + 12 + i * 9;
+        const lx = Math.round(cx - w / 2) + 5;
+        F().draw(n, lx, ly, { color: col });
+        let dd = d;
+        const room = w - 14 - F().width(n);
+        while (dd && F().width(dd) > room) dd = dd.slice(0, -2);
+        if (dd !== d) dd = dd.trimEnd() + '...';
+        F().draw(dd, lx + F().width(n) + 6, ly, { color: '#c8d8e0' });
+      });
+    }
+
     // ---------------------------------------------------------------- interface
     drawExploreHUD() {
       const ctx = GS.ctx;
@@ -1819,6 +1926,9 @@
         const txt = this.menu.pending.ab.target === 'ally' ? 'Choisis un allié' : 'Choisis une cible';
         R.panel(W() / 2 - 56, 30, 112, 14, { cut: 4 });
         F().draw(txt, W() / 2, 34, { color: '#ffe060', align: 'center' });
+        const list = this.validTargets(this.menu);
+        const t = list[U.clamp(this.menu.tidx, 0, list.length - 1)];
+        if (t) this.drawPassiveBox(t, W() / 2, 48);
       }
     }
 
@@ -1863,6 +1973,12 @@
         F().draw('HP', x + 7, y + 14, { color: '#3ee0f0' });
         F().draw(`${Math.round(boss.shownHp)}/${boss.maxHp}`, x + w - 7, y + 14, { color: '#5aa0ff', outline: '#04101a', align: 'right' });
         R.bar(x + 22, y + 23, w - 30, 3, boss.hp / boss.maxHp, '#ff3058', '#ffa040', { ghost: boss.hpGhost, frame: false });
+        let px = x + w - 4;
+        for (const id of boss.passives.slice().reverse()) {
+          const n = GS.PASSIVES[id].name;
+          F().draw(n, px, y + 32, { color: GS.Passives.color(id, this.t), outline: '#04101a', align: 'right' });
+          px -= F().width(n) + 6;
+        }
         GS.Icons.draw(boss.element, x - 9, y + 13);
       } else {
         F().draw(`VAGUE ${this.wave + 1}/${this.stage.waves.length}`, W() - 6, 8, { color: R.COL.cyan, outline: '#04101a', align: 'right' });

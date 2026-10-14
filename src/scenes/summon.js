@@ -15,6 +15,7 @@
       this.fx = new GS.FXLayer();
       this.results = null;
       this.showRates = false;
+      this.mode = this.mode || 'heroes';
       GS.Audio.music('summon');
     }
 
@@ -38,6 +39,24 @@
       GS.Audio.sfx('summon_charge');
     }
 
+    // Invocation d'équipement (rareté -> couleur des orbes : commun/rare 3, épique 4, légendaire 5).
+    pullEquip(n) {
+      const res = GS.Equip.summon(n);
+      if (!res) {
+        GS.Audio.sfx('error');
+        GS.UI.toast('Pas assez de cristaux ! Termine des quêtes.', '#ff8090');
+        return;
+      }
+      const rr = (it) => [3, 3, 4, 5][GS.Equip.rank(it.id)];
+      this.eqResults = res;
+      this.best = Math.max(...res.map(rr));
+      this.state = 'anim';
+      this.at = 0;
+      this.orbs = res.map((it, i) => ({ a: (i / res.length) * Math.PI * 2, r: 140 + Math.random() * 40, rar: rr(it) }));
+      this.fx.clear();
+      GS.Audio.sfx('summon_charge');
+    }
+
     update(dt) {
       this.t += dt;
       this.fx.update(dt);
@@ -55,7 +74,12 @@
         }
         if (this.at > 2.6 || (this.at > 0.4 && inp.tapped())) {
           inp.consume();
-          this.startReveal(0);
+          if (this.mode === 'equip') {
+            this.state = 'eqresults';
+            this.rt = 0;
+            GS.Audio.sfx('summon_burst');
+            if (this.best >= 4) setTimeout(() => GS.Audio.sfx('rare'), 300);
+          } else this.startReveal(0);
         }
       } else if (this.state === 'reveal') {
         this.rt += dt;
@@ -98,16 +122,97 @@
       if (this.state === 'banner') this.drawBanner(ctx);
       else if (this.state === 'anim') this.drawAnim(ctx);
       else if (this.state === 'reveal') this.drawReveal(ctx);
+      else if (this.state === 'eqresults') this.drawEquipResults(ctx);
       else this.drawResults(ctx);
     }
 
+    // Onglets HÉROS / ÉQUIPEMENT dans la barre du haut.
+    drawModeTabs() {
+      if (UI().button('HÉROS', 146, 2, 60, 14, { id: 's_mh', sfx: 'select', selected: this.mode === 'heroes', color: this.mode === 'heroes' ? '#ff70d0' : undefined, cut: 4 })) this.mode = 'heroes';
+      if (UI().button('ÉQUIPEMENT', 210, 2, 76, 14, { id: 's_me', sfx: 'select', selected: this.mode === 'equip', color: this.mode === 'equip' ? '#c070ff' : undefined, cut: 4 })) this.mode = 'equip';
+    }
+
+    drawEquipBanner() {
+      const col = '#c070ff';
+      this.drawSky(col);
+      if (UI().topBar('INVOCATION', { back: true })) {
+        GS.go(new GS.HomeScene());
+        return;
+      }
+      this.drawModeTabs();
+      const x = 40;
+      const y = 26;
+      const w = 400;
+      const h = 168;
+      R.panel(x, y, w, h, { cut: 10, border: col, glow: 0.2 + Math.sin(this.t * 3) * 0.1 });
+      R.gradV(x + 2, y + 2, w - 4, h - 4, U.rgba(col, 0.25), 'rgba(5,3,12,0.4)');
+      F().draw('Arsenal Maudit', x + 14, y + 10, { color: '#ffffff', outline: '#000', scale: 2 });
+      F().draw('Armes, armures et accessoires à passifs', x + 14, y + 30, { color: col, outline: '#000' });
+      const r = GS.Equip.SUMMON.rates;
+      F().draw(`Légendaire ${r.legendary}% · Épique ${r.epic}% · Rare ${r.rare}% · Commun ${r.common}%`, x + 14, y + 48, { color: '#e8fbff', outline: '#000' });
+      F().draw('x10 : Épique ou mieux garanti', x + 14, y + 60, { color: '#ffd040', outline: '#000' });
+      F().draw('3 pièces par héros, chacune avec son passif', x + 14, y + 72, { color: R.COL.dim, outline: '#000' });
+      const show = ['epee_aube', 'faux_eclipse', 'cuirasse_phenix', 'couronne'];
+      show.forEach((id, i) => {
+        const cx = x + 64 + i * 92;
+        UI().rays(cx, y + 112, GS.Equip.color(id), this.t + i, 8, 40, 0.12);
+        GS.UI.itemIcon(id, cx - 15, y + 96 + Math.round(Math.sin(this.t * 2 + i) * 2), { size: 30 });
+        F().wrap(GS.EQUIPS[id].name, 88).slice(0, 2).forEach((l, k) => F().draw(l, cx, y + 132 + k * 9, { color: GS.Equip.color(id), outline: '#000', align: 'center' }));
+      });
+      const g = GS.data.gems;
+      const S = GS.Equip.SUMMON;
+      if (UI().button('INVOQUER x1', 60, 210, 170, 40, { id: 'se_1', icon: 'gem', sub: S.cost1 + ' cristaux', disabled: g < S.cost1, why: 'Pas assez de cristaux !' })) this.pullEquip(1);
+      if (UI().button('INVOQUER x10', 250, 210, 170, 40, { id: 'se_10', icon: 'gem', color: '#ffd040', sub: S.cost10 + ' cristaux · Épique garanti', disabled: g < S.cost10, why: 'Pas assez de cristaux !' })) this.pullEquip(10);
+    }
+
+    drawEquipResults() {
+      this.rt = (this.rt || 0) + (GS.dt || 0.016);
+      this.drawSky('#c070ff');
+      this.fx.draw(GS.ctx);
+      F().draw('ÉQUIPEMENTS OBTENUS', GS.W / 2, 10, { color: '#ffffff', outline: '#000', scale: 2, align: 'center' });
+      const res = this.eqResults;
+      const n = res.length;
+      const cols = Math.min(5, n);
+      const cw = 82;
+      const ch = 90;
+      const x0 = GS.W / 2 - (cols * (cw + 6)) / 2 + 3;
+      res.forEach((it, i) => {
+        if (this.rt < i * 0.08) return;
+        const def = GS.EQUIPS[it.id];
+        const col = GS.Passives.RARITY[def.rarity].color;
+        const x = x0 + (i % cols) * (cw + 6);
+        const y = 32 + Math.floor(i / cols) * (ch + 6);
+        R.panel(x, y, cw, ch, { cut: 6, border: col, glow: GS.Equip.rank(it.id) >= 3 ? 0.3 : 0 });
+        GS.UI.itemIcon(it.id, x + cw / 2 - 13, y + 6, { size: 26 });
+        F().wrap(def.name, cw - 6).slice(0, 2).forEach((l, k) => F().draw(l, x + cw / 2, y + 36 + k * 9, { color: col, align: 'center' }));
+        F().draw(GS.Passives.RARITY[def.rarity].name, x + cw / 2, y + 56, { color: R.COL.dim, align: 'center' });
+        F().draw(GS.UI.fitText(GS.PASSIVES[def.passive].name, cw - 6), x + cw / 2, y + 70, { color: GS.Passives.color(def.passive, this.t), align: 'center' });
+      });
+      const S = GS.Equip.SUMMON;
+      if (UI().button('OK', 140, 232, 90, 26, { id: 're_ok', key: 'confirm' })) this.state = 'banner';
+      if (UI().button('ENCORE x' + n, 250, 232, 110, 26, { id: 're_again', color: '#ffd040', disabled: GS.data.gems < (n === 10 ? S.cost10 : S.cost1), why: 'Pas assez de cristaux !' })) this.pullEquip(n);
+      if (UI().button('ÉQUIPER ▶', 370, 232, 100, 26, { id: 're_eq', sfx: 'select' })) {
+        GS.go(new GS.EquipScene(null, () => {
+          const sc = new SummonScene();
+          sc.mode = 'equip';
+          return sc;
+        }));
+      }
+      UI().currency(GS.W - 6, 8);
+    }
+
     drawBanner() {
+      if (this.mode === 'equip') {
+        this.drawEquipBanner();
+        return;
+      }
       const b = this.banner;
       this.drawSky(b.color);
       if (UI().topBar('INVOCATION', { back: true })) {
         GS.go(new GS.HomeScene());
         return;
       }
+      this.drawModeTabs();
       // carte de bannière
       const x = 40;
       const y = 26;

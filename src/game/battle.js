@@ -10,6 +10,10 @@
   class Fighter {
     constructor(o) {
       Object.assign(this, o);
+      // passifs : effets additionnés (voir data/passives.js)
+      this.passives = this.passives || [];
+      this.pm = GS.Passives.mods(this.passives);
+      this.gutsLeft = this.pm.guts || 0;
       this.hp = this.maxHp;
       this.statuses = [];
       this.alive = true;
@@ -62,7 +66,11 @@
       return this.spd * (this.has('spdUp') ? 1.3 : 1);
     }
     critRate() {
-      return (this.isHero ? 0.1 : 0.05) + (this.has('critUp') ? 0.25 : 0);
+      return (this.isHero ? 0.1 : 0.05) + (this.has('critUp') ? 0.25 : 0) + this.p('crit');
+    }
+    // Valeur d'un effet de passif (0 si absent).
+    p(k) {
+      return this.pm[k] || 0;
     }
     turnLen() {
       return TURN / this.effSpd();
@@ -93,6 +101,7 @@
       def,
       name: def.name,
       element: def.element,
+      passives: GS.Save.activePassives(u),
       maxHp: st.hp,
       atk: st.atk,
       defense: st.def,
@@ -125,6 +134,9 @@
       const o = Object.assign({ scale: 2 }, def.art[2] || {});
       sprite = GS.MonsterArt.build(key + (el || '') + JSON.stringify(o), def.art[1], o);
     } else sprite = GS.MonsterArt.buildHumanoid(key, def.art[1], def.art[2] || 2);
+    const passives = GS.ENEMY_PASSIVES[key] || [];
+    const m = GS.Passives.mods(passives);
+    const g = (s) => m[s] || 0;
     const f = new Fighter({
       side: 'enemy',
       slot,
@@ -133,10 +145,11 @@
       name: def.name,
       element: def.element,
       boss: !!def.boss,
-      maxHp: Math.round(def.hp * k),
-      atk: Math.round(def.atk * k),
-      defense: Math.round(def.def * k),
-      spd: def.spd,
+      passives,
+      maxHp: Math.round(def.hp * k * (1 + g('hp'))),
+      atk: Math.round(def.atk * k * (1 + g('atk'))),
+      defense: Math.round(def.def * k * (1 + g('def'))),
+      spd: def.spd + g('spd'),
       maxMp: 0,
       mp: 0,
       sp: 0,
@@ -220,26 +233,44 @@
 
   // ------------------------------------------------------------ dégâts
   B.damage = (att, tgt, ab, frac) => {
+    const elName = ab.element || att.element;
+    const elem = GS.elemMult(elName, tgt.element);
+    // esquive (passif)
+    if (tgt.p('dodge') && Math.random() < Math.min(0.5, tgt.p('dodge'))) return { dmg: 0, crit: false, elem, miss: true };
     const atk = att.effAtk();
     const def = Math.max(0, tgt.effDef());
     let dmg = atk * (ab.power || 1) * frac * (300 / (300 + def));
-    const elem = GS.elemMult(ab.element || att.element, tgt.element);
     dmg *= elem;
+    // bonus de dégâts des passifs de l'attaquant
+    let bonus = att.p('dmg') + att.p('vs_' + tgt.element);
+    if (tgt.boss) bonus += att.p('boss');
+    if (att.hp < att.maxHp * 0.5) bonus += att.p('lowHp');
+    if (att.hp >= att.maxHp) bonus += att.p('fullHp');
+    dmg *= 1 + bonus;
+    // réductions des passifs de la cible
+    dmg *= Math.max(0.2, 1 - tgt.p('dmgTaken')) * Math.max(0.2, 1 - tgt.p('res_' + elName));
     const crit = Math.random() < att.critRate() + (ab.crit || 0);
-    if (crit) dmg *= 1.6;
+    if (crit) dmg *= 1.6 + att.p('critDmg');
     dmg *= U.rand(0.93, 1.07);
     if (tgt.isHero && tgt.guard) dmg *= 0.5;
     return { dmg: Math.max(1, Math.round(dmg)), crit, elem };
   };
 
-  B.heal = (src, ab, tgt) => Math.round(src.effAtk() * (ab.heal || 1) * U.rand(0.95, 1.05) + tgt.maxHp * 0.04);
+  B.heal = (src, ab, tgt) => Math.round((src.effAtk() * (ab.heal || 1) * U.rand(0.95, 1.05) + tgt.maxHp * 0.04) * (1 + src.p('heal')));
 
   // Applique un statut (rafraîchit la durée s'il existe déjà).
   B.addStatus = (tgt, eff, src) => {
     if (!tgt.alive) return false;
     let chance = eff.chance === undefined ? 1 : eff.chance;
+    const bad = GS.STATUS[eff.type] && GS.STATUS[eff.type].bad;
+    if (bad && src && src !== tgt) chance *= 1 + src.p('affl');
     if (tgt.boss && eff.type === 'stun') chance *= 0.4;
     if (Math.random() > chance) return false;
+    // résistance aux altérations (passif)
+    if (bad && tgt.p('resist') && Math.random() < tgt.p('resist')) {
+      tgt.resisted = true;
+      return false;
+    }
     const cur = tgt.status(eff.type);
     const power = eff.type === 'burn' ? src.effAtk() * 0.35 : eff.type === 'poison' ? src.effAtk() * 0.25 + Math.min(tgt.maxHp * 0.03, 400) : 0;
     if (cur) {
@@ -256,6 +287,7 @@
       if (s.type === 'burn' || s.type === 'poison') ev.push({ type: s.type, amount: Math.max(1, Math.round(s.power)) });
       if (s.type === 'regen') ev.push({ type: 'regen', amount: Math.round(f.maxHp * 0.08) });
     }
+    if (f.p('regen') && f.hp < f.maxHp) ev.push({ type: 'regen', amount: Math.round(f.maxHp * f.p('regen')), passive: true });
     return ev;
   };
 

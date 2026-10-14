@@ -43,7 +43,7 @@
       const x = 290;
       const w = 182;
       if (UI().button('QUÊTES', x, 28, w, 40, { scale: 2, color: '#ffd040', sub: 'Explorer et combattre', id: 'h_q' })) GS.go(new GS.QuestScene(this.lastArea()));
-      if (UI().button('INVOCATION', x, 74, w, 36, { scale: 2, color: '#ff70d0', sub: 'Obtenir des héros', id: 'h_s' })) GS.go(new GS.SummonScene());
+      if (UI().button('INVOCATION', x, 74, w, 36, { scale: 2, color: '#ff70d0', sub: 'Héros et équipements', id: 'h_s' })) GS.go(new GS.SummonScene());
       if (UI().button('HÉROS', x, 116, 88, 30, { id: 'h_u', sub: GS.data.units.length + ' possédés' })) GS.go(new GS.UnitsScene());
       if (UI().button('ÉQUIPE', x + 94, 116, 88, 30, { id: 'h_t', sub: 'Formation' })) GS.go(new GS.TeamScene());
       const gift = GS.Save.canClaimGift();
@@ -59,11 +59,12 @@
         GS.Audio.setMuted(!muted);
         GS.Save.save();
       }
+      if (UI().button('ÉQUIPEMENT', x, 202, 88, 30, { id: 'h_e', color: '#c070ff', sub: GS.data.items.length + ' objets' })) GS.go(new GS.EquipScene());
+      if (UI().button('BOUTIQUE', x + 94, 202, 88, 30, { id: 'h_b', color: '#ffd040', sub: 'Stock du jour' })) GS.go(new GS.ShopScene());
       const cleared = Object.keys(GS.data.cleared).length;
       const total = GS.AREAS.reduce((s, a) => s + a.stages.length, 0);
-      R.panel(x, 204, w, 30, { cut: 5 });
-      F().draw(`Progression : ${cleared}/${total} quêtes`, x + 8, 210, { color: '#e8fbff' });
-      F().draw(`Victoires : ${GS.data.stats.wins}`, x + 8, 221, { color: R.COL.dim });
+      F().draw(`Progression : ${cleared}/${total} quêtes`, 8, 76, { color: '#e8fbff', outline: '#04101a' });
+      F().draw(`Victoires : ${GS.data.stats.wins}`, 8, 86, { color: R.COL.dim, outline: '#04101a' });
       if (this.options) this.drawOptions();
     }
     lastArea() {
