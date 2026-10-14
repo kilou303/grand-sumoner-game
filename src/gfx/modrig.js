@@ -54,15 +54,124 @@
     }
     return u;
   };
+  // Gabarit tourné autour d'un axe vertical (colonne cx) : chaque ligne est enroulée sur un
+  // cylindre de section elliptique (profondeur = ratio × sa demi-largeur) ; chaque colonne
+  // montre le point le plus proche de la caméra. Les détails glissent sur le volume (le visage
+  // passe de face au profil) au lieu d'être écrasés. Le dos est pris dans `back` aux mêmes
+  // colonnes, vu en miroir (la tête y devient des cheveux). Rend { t, ax } : nouveau gabarit
+  // (élargi au besoin) et colonne de l'axe dans celui-ci.
+  const warpCache = new WeakMap();
+  const warp = (tpl, back, cx, yaw, ratio) => {
+    let m = warpCache.get(tpl);
+    if (!m) warpCache.set(tpl, (m = new Map()));
+    const key = yaw.toFixed(4) + ':' + cx + ':' + ratio;
+    let r = m.get(key);
+    if (r) return r;
+    const h = tpl.length;
+    const w = tpl[0].length;
+    // chaque ligne est une ellipse autour de son propre centre ; centres et demi-largeurs
+    // sont lissés sur les lignes voisines (sinon les lignes de largeurs différentes se
+    // décalent et font des bandes)
+    const span = tpl.map((row, y) => {
+      let x0 = Infinity;
+      let x1 = -Infinity;
+      for (let x = 0; x < w; x++) {
+        if (row[x] === '.' && back[y][x] === '.') continue;
+        x0 = Math.min(x0, x);
+        x1 = Math.max(x1, x + 1);
+      }
+      return x1 > x0 ? [x0, x1] : null;
+    });
+    const smooth = (f) =>
+      span.map((sp, y) => {
+        if (!sp) return 0;
+        let sum = 0;
+        let n = 0;
+        for (let k = -2; k <= 2; k++) {
+          const o = span[y + k];
+          if (o) {
+            sum += f(o);
+            n++;
+          }
+        }
+        return sum / n;
+      });
+    const cen = smooth((o) => (o[0] + o[1]) / 2);
+    const half = smooth((o) => (o[1] - o[0]) / 2);
+    const rad = span.map((sp, y) => (sp ? Math.max(cen[y] - sp[0], sp[1] - cen[y], half[y]) : 0));
+    let ext = 1;
+    span.forEach((sp, y) => {
+      if (sp) ext = Math.max(ext, Math.abs(cen[y] - cx) + rad[y]);
+    });
+    const Rm = Math.ceil(ext);
+    const W = 2 * Rm + 2;
+    const ax = Rm + 1 + (cx - Math.floor(cx));
+    const cy = Math.cos(yaw);
+    const sy = Math.sin(yaw);
+    const t = tpl.map((row, y) => {
+      const R = rad[y];
+      const out = new Array(W).fill('.');
+      if (!R) return out.join('');
+      const c = cen[y];
+      const Rz = R * ratio;
+      const best = new Float64Array(W).fill(-Infinity);
+      const N = Math.ceil(R * 24);
+      for (let i = 0; i < N; i++) {
+        const th = ((i + 0.5) / N - 0.5) * 2 * Math.PI;
+        const px = R * Math.sin(th);
+        const pz = Rz * Math.cos(th);
+        const j = Math.floor(ax + (c - cx + px) * cy + pz * sy);
+        const z = -px * sy + pz * cy;
+        if (j < 0 || j >= W || z <= best[j]) continue;
+        // un trou du gabarit laisse voir ce qu'il y a derrière (l'autre face du volume)
+        const sx = Math.floor(c + px);
+        const ch = sx < 0 || sx >= w ? '.' : (pz >= 0 ? row : back[y])[sx];
+        if (ch === '.') continue;
+        best[j] = z;
+        out[j] = ch;
+      }
+      return out.join('');
+    });
+    r = { t, ax };
+    m.set(key, r);
+    return r;
+  };
+  M.warp = warp;
+  // Pièce tournée : enroulée sur son propre volume (autour du centre de sa boîte) puis placée
+  // comme un point du corps situé à cette distance de l'axe (cx) et à z0 en profondeur.
+  // Rend { t, ax } : gabarit et colonne de l'axe du corps dans ce gabarit.
+  const turnPiece = (tpl, back, cx, yaw, ratio, z0 = 0) => {
+    let x0 = Infinity;
+    let x1 = -Infinity;
+    tpl.forEach((row, y) => {
+      for (let x = 0; x < row.length; x++) {
+        if (row[x] === '.' && back[y][x] === '.') continue;
+        x0 = Math.min(x0, x);
+        x1 = Math.max(x1, x);
+      }
+    });
+    if (x1 < x0) return { t: tpl, ax: cx };
+    const cc = (x0 + x1 + 1) / 2;
+    const w = warp(tpl, back, cc, yaw, ratio);
+    return { t: w.t, ax: w.ax - ((cc - cx) * Math.cos(yaw) + z0 * Math.sin(yaw)) };
+  };
   // Place `tpl` pour que son point (ax, ay) tombe en (px, py), tourné de `ang` (sens horaire).
-  const stampRot = (g, tpl, ax, ay, px, py, ang, map) => {
+  // o (facultatif) : k = raccourci le long de l'axe u du gabarit (membre vu en profondeur),
+  // s = échelle uniforme (perspective : plus gros quand c'est plus près).
+  const stampRot = (g, tpl, ax, ay, px, py, ang, map, o) => {
     const th = tpl.length;
     const tw = tpl[0].length;
     const c = Math.cos(ang);
     const s = Math.sin(ang);
-    // quasi droit : copie directe (identique au dessin d'origine)
-    const up = Math.abs(Math.sin(ang)) > 0.04 ? upscaled(tpl) : null;
-    const rad = Math.ceil(Math.hypot(Math.max(ax, tw - ax), Math.max(ay, th - ay))) + 1;
+    const k = o && o.k !== undefined ? Math.max(0.05, o.k) : 1;
+    const sc = o && o.s !== undefined ? o.s : 1;
+    const ux = o && o.u ? o.u[0] : 0;
+    const uy = o && o.u ? o.u[1] : 1;
+    const scaled = k !== 1 || sc !== 1;
+    // quasi droit et sans échelle : copie directe (identique au dessin d'origine)
+    const up = Math.abs(Math.sin(ang)) > 0.04 || scaled ? upscaled(tpl) : null;
+    const rad = Math.ceil(Math.hypot(Math.max(ax, tw - ax), Math.max(ay, th - ay)) * Math.max(1, sc)) + 1;
+    const ik = 1 / k - 1;
     const out = [];
     for (let y = Math.floor(py - rad); y <= py + rad; y++) {
       if (y < 0 || y >= g.h) continue;
@@ -70,8 +179,15 @@
         if (x < 0 || x >= g.w) continue;
         const dx = x + 0.5 - px;
         const dy = y + 0.5 - py;
-        const fx = dx * c + dy * s + ax;
-        const fy = -dx * s + dy * c + ay;
+        let rx = dx * c + dy * s;
+        let ry = -dx * s + dy * c;
+        if (scaled) {
+          const pr = (rx * ux + ry * uy) * ik;
+          rx = (rx + pr * ux) / sc;
+          ry = (ry + pr * uy) / sc;
+        }
+        const fx = rx + ax;
+        const fy = ry + ay;
         if (fy < 0 || fy >= th || fx < 0 || fx >= tw) continue;
         let ch = up ? up[Math.floor(fy * UP)][Math.floor(fx * UP)] : tpl[Math.floor(fy)][Math.floor(fx)];
         if (ch === '.') continue;
@@ -90,7 +206,8 @@
   // Le pivot (hanche) du gabarit est placé en (hx, hy).
   const WAIST = 11; // lignes entre la hanche et la taille
   M.WAIST = WAIST;
-  const stampTorso = (g, tpl, pvx, pvy, hx, hy, lean, sy, sway, hemRows, hipLean) => {
+  // cells (facultatif) : reçoit les cases écrites.
+  const stampTorso = (g, tpl, pvx, pvy, hx, hy, lean, sy, sway, hemRows, hipLean, cells = null) => {
     const th = tpl.length;
     const tw = tpl[0].length;
     const k = Math.tan(lean);
@@ -111,10 +228,13 @@
         const ch = row[tx];
         if (ch === '.') continue;
         const x = Math.round(hx + (tx - pvx) + shift);
-        if (x >= 0 && x < g.w) g[y][x] = ch;
+        if (x >= 0 && x < g.w) {
+          g[y][x] = ch;
+          if (cells) cells.push(y * g.w + x);
+        }
       }
     }
-    // position (en grille) d'un point du gabarit après transformation
+    // position (en grille) d'un point du gabarit après transformation (corps de face)
     return (px, py) => {
       const up = pvy - py;
       return { x: hx + (px - pvx) + shiftOf(up), y: hy - up * sy };
@@ -122,7 +242,8 @@
   };
 
   // Liseré sombre autour d'une pièce, là où elle recouvre d'autres pièces.
-  const innerOutline = (g, cells, ch) => {
+  // owner/gid (facultatifs) : on ne cerne pas les pixels du même membre (autres pièces du bras).
+  const innerOutline = (g, cells, ch, owner, gid) => {
     const set = new Set(cells);
     for (const id of cells) {
       const x = id % g.w;
@@ -133,6 +254,7 @@
         if (nx < 0 || ny < 0 || nx >= g.w || ny >= g.h) continue;
         const nid = ny * g.w + nx;
         if (set.has(nid) || g[ny][nx] === '.') continue;
+        if (owner && owner[nid] === gid) continue;
         g[ny][nx] = ch;
       }
     }
@@ -140,6 +262,29 @@
 
   const ang0 = (p) => Math.atan2(p.end[0] - p.pivot[0], p.end[1] - p.pivot[1]);
   const len = (p) => Math.hypot(p.end[0] - p.pivot[0], p.end[1] - p.pivot[1]);
+  // axe du membre dans son gabarit (du pivot vers le bout), pour le raccourci en profondeur
+  const axis = (p) => {
+    const l = len(p) || 1;
+    return [(p.end[0] - p.pivot[0]) / l, (p.end[1] - p.pivot[1]) / l];
+  };
+
+  // ------------------------------------------------------------ 3D
+  // Squelette en 3D projeté sur l'écran : x vers l'avant du perso (droite), y vers le bas,
+  // z vers la caméra. Chaque membre a un angle dans le plan (a) et un angle de profondeur (d) ;
+  // le corps entier peut tourner autour de l'axe vertical des hanches (yaw). Un membre qui
+  // pointe vers la caméra ou s'en éloigne est raccourci, grossit ou rapetisse selon sa distance
+  // (perspective), et les pièces sont dessinées de la plus lointaine à la plus proche.
+  // Sans profondeur ni rotation, le rendu est exactement celui du dessin à plat.
+  M.PERSP = 120; // distance de la caméra (pixels) pour la perspective ; 0 : sans perspective
+  const KZ = 8; // rang d'affichage gagné par pixel vers la caméra
+  // profondeur au repos (pixels vers la caméra) des points d'attache
+  const Z_NEAR_ARM = 4;
+  const Z_LEG = 2;
+  const Z_HEAD = 1;
+  // épaisseur (profondeur / largeur) du torse et de la tête, pour les rotations
+  const TORSO_DEPTH = 0.55;
+  const HEAD_DEPTH = 0.9;
+  const ARM_DEPTH = 0.8;
   const lumOf = (h) => {
     const [r, g, b] = U.hexToRgb(h);
     return 0.3 * r + 0.59 * g + 0.11 * b;
@@ -183,6 +328,40 @@
       }
     }
 
+    // Arrière de la tête (vue de dos) : le visage est recouvert par les cheveux (ou la
+    // capuche) : chaque pixel qui n'en fait pas partie prend le pixel de cheveux le plus proche
+    // sur sa ligne. Sont des cheveux les matières « hair » du modèle relevé (ou des persos
+    // assemblés) ; à défaut, les couleurs présentes dans le haut de la tête.
+    headHair() {
+      if (this._headHair !== undefined) return this._headHair;
+      const art = this.spec.art;
+      const t = this.P.head.t;
+      const mat = {};
+      if (art.mat && art.mat.head) Object.assign(mat, art.mat.head);
+      const fam = this.spec.shadeFamily;
+      if (fam) for (const [k, f] of Object.entries(fam)) if (f.startsWith('head:')) mat[k] = f.slice(5);
+      const top = new Set();
+      for (const row of t.slice(0, Math.max(2, Math.round(t.length / 4)))) for (const ch of row) top.add(ch);
+      const hairy = (ch) => ch !== '.' && (mat[ch] ? mat[ch] === 'hair' : top.has(ch));
+      const count = {};
+      for (const row of t) for (const ch of row) if (hairy(ch)) count[ch] = (count[ch] || 0) + 1;
+      const main = Object.keys(count).sort((a, b) => count[b] - count[a])[0];
+      if (!main) return (this._headHair = null);
+      this._headHair = t.map((row) =>
+        [...row]
+          .map((ch, x) => {
+            if (ch === '.' || hairy(ch)) return ch;
+            for (let d = 1; d < row.length; d++) {
+              if (hairy(row[x - d])) return row[x - d];
+              if (hairy(row[x + d])) return row[x + d];
+            }
+            return main;
+          })
+          .join('')
+      );
+      return this._headHair;
+    }
+
     render(pose) {
       const sp = this.spec;
       const P = this.P;
@@ -190,128 +369,195 @@
       const J = sp.joints;
       const lost = this.lost;
       const g = Pix.grid(CW, CH);
-      const lean = pose.lean || 0;
+      const lean0 = pose.lean || 0;
       const sy = 1 + (pose.squash || 0);
       const stumps = [];
       const pts = {};
+      const depth = {};
+      const yaw = pose.yaw || 0;
+      const cyw = Math.cos(yaw);
+      const syw = Math.sin(yaw);
+      const turned = yaw !== 0;
+      // le corps penché vers l'avant, vu tourné : l'inclinaison à l'écran suit le cosinus
+      const lean = lean0 * cyw;
+      const PD = M.PERSP;
+      const persp = (dz) => (PD > 0 && dz ? U.clamp(PD / (PD - dz), 0.8, 1.25) : 1);
       // hauteur de hanche : le pied le plus bas touche le sol (sauf en l'air : pose.y < 0)
       const ext = (l, side) => {
         if (lost['leg' + side]) return -1;
-        return Math.cos(l.a) * L.thigh + (lost['knee' + side] ? 0 : Math.cos(l.a - l.k) * L.shin);
+        const d1 = l.d || 0;
+        const d2 = d1 + (l.dk || 0);
+        return Math.cos(l.a) * Math.cos(d1) * L.thigh + (lost['knee' + side] ? 0 : Math.cos(l.a - l.k) * Math.cos(d2) * L.shin);
       };
       let lowest = Math.max(ext(pose.legs[0], 'B'), ext(pose.legs[1], 'F'));
       if (lowest < 0) lowest = 2; // plus de jambes : sur le bassin
       const hip = { x: ROOT_X + (pose.x || 0), y: GROUND - 6 - lowest + (pose.y || 0) };
 
-      const limb = (part, x, y, a, map) => {
+      // point d'attache (x à plat, profondeur au repos z0) après rotation du corps
+      const root = (x, y, z0) => ({ x: hip.x + (x - hip.x) * cyw + z0 * syw, y, z: -(x - hip.x) * syw + z0 * cyw, z0 });
+      // segment de longueur l, angle a dans le plan, d en profondeur, puis rotation du corps
+      // vecteur (bx, by, bz) dans le repère du corps, vu après la rotation du corps
+      const segV = (bx, by, bz) => {
+        const dx = bx * cyw + bz * syw;
+        return { dx, dy: by, dz: -bx * syw + bz * cyw, ang: Math.atan2(dx, by), slen: Math.hypot(dx, by) };
+      };
+      const seg = (l, a, d) => {
+        // à plat (sans profondeur ni rotation) : exactement le calcul du dessin d'origine
+        if (!d && !syw) return { dx: Math.sin(a) * l, dy: Math.cos(a) * l, dz: 0, ang: a, slen: l };
+        return segV(Math.sin(a) * Math.cos(d) * l, Math.cos(a) * Math.cos(d) * l, Math.sin(d) * l);
+      };
+      const at = (o, v) => ({ x: o.x + v.dx, y: o.y + v.dy, z: o.z + v.dz, z0: o.z0 });
+
+      // ---------------------------------------------------------- pièces à dessiner
+      // Chaque pièce a un rang : le rang du dessin à plat (ordre d'origine) plus KZ par pixel
+      // d'avancée vers la caméra. On les trie puis on les dessine de la plus lointaine à la
+      // plus proche.
+      const items = [];
+      const add = (layer, dz, draw, o = {}) => items.push(Object.assign({ key: layer + KZ * dz + (o.sub || 0) * 0.01, n: items.length, draw }, o));
+      let gid = 0;
+      // membre (pièce) entre deux points : pivot du gabarit sur `from`, axe vers `v`
+      const limbDraw = (part, from, v, map) => () => {
         const p = P[part];
-        const cells = stampRot(g, p.t, p.pivot[0] + 0.5, p.pivot[1] + 0.5, x, y, ang0(p) - a, map);
-        return { cells, ex: x + Math.sin(a) * len(p), ey: y + Math.cos(a) * len(p) };
+        const r = len(p) ? v.slen / len(p) : 1;
+        const k = Math.abs(r - 1) < 1e-6 ? 1 : U.clamp(r, 0.3, 1);
+        return stampRot(g, p.t, p.pivot[0] + 0.5, p.pivot[1] + 0.5, from.x, from.y, ang0(p) - v.ang, map, { k, u: axis(p), s: persp(from.z + v.dz / 2 - from.z0) });
       };
 
-      // Jambe en 3 pièces : cuisse, tibia, pied.
+      // ---------------------------------------------------------- jambes
       const drawLeg = (l, front) => {
         const side = front ? 'F' : 'B';
-        const hx = hip.x + (front ? sp.hipF : sp.hipB);
-        pts['hip' + side] = { x: hx, y: hip.y };
+        const layer = front ? 30 : 20;
+        const group = ++gid;
+        const h = root(hip.x + (front ? sp.hipF : sp.hipB), hip.y, front ? Z_LEG : -Z_LEG);
+        pts['hip' + side] = { x: h.x, y: h.y };
         if (lost['leg' + side]) {
-          stumps.push([hx, hip.y + 1, 5, 3]);
+          stumps.push([h.x, h.y + 1, 5, 3]);
           return;
         }
         const map = front ? null : this.shade;
+        const thighN = front ? 'thighF' : 'thighB';
+        const shinN = front ? 'shinF' : 'shinB';
+        const outline = (k) => front || k > 60;
         // traînée d'un coup de pied rapide : deux images fantômes du tibia et du pied le long
         // de la course, sous la jambe
         const tr = pose.trail && pose.trail.legs[front ? 1 : 0];
         if (tr && !lost['knee' + side]) {
-          for (const k of [0.35, 0.7]) {
-            const ga = U.lerp(tr.a, l.a, k);
-            const sa = ga - U.lerp(tr.k, l.k, k);
-            const kx = hx + Math.sin(ga) * L.thigh;
-            const ky = hip.y + Math.cos(ga) * L.thigh;
-            const s = limb(front ? 'shinF' : 'shinB', kx, ky, sa, map);
-            stampRot(g, P.shoe.t, P.shoe.pivot[0] + 0.5, P.shoe.pivot[1] + 0.5, s.ex, s.ey - 1, U.clamp(-sa * 0.65, -0.7, 1.4), map);
-          }
+          add(layer, 0, () => {
+            for (const k of [0.35, 0.7]) {
+              const ga = U.lerp(tr.a, l.a, k);
+              const sa = ga - U.lerp(tr.k, l.k, k);
+              const kx = h.x + Math.sin(ga) * L.thigh;
+              const ky = h.y + Math.cos(ga) * L.thigh;
+              const pS = P[shinN];
+              stampRot(g, pS.t, pS.pivot[0] + 0.5, pS.pivot[1] + 0.5, kx, ky, ang0(pS) - sa, map);
+              const ex = kx + Math.sin(sa) * len(pS);
+              const ey = ky + Math.cos(sa) * len(pS);
+              stampRot(g, P.shoe.t, P.shoe.pivot[0] + 0.5, P.shoe.pivot[1] + 0.5, ex, ey - 1, U.clamp(-sa * 0.65, -0.7, 1.4), map);
+            }
+            return [];
+          }, { sub: -1 });
         }
-        const t = limb(front ? 'thighF' : 'thighB', hx, hip.y, l.a, map);
-        pts['knee' + side] = { x: t.ex, y: t.ey };
-        let cells = t.cells;
-        if (lost['knee' + side]) stumps.push([t.ex, t.ey, 4, 4]);
-        else {
-          const sa = l.a - l.k;
-          const s = limb(front ? 'shinF' : 'shinB', t.ex, t.ey, sa, map);
-          const shoe = P.shoe;
-          const fr = U.clamp(-sa * 0.65 + (l.toe || 0), -0.7, 1.4);
-          cells = cells.concat(s.cells, stampRot(g, shoe.t, shoe.pivot[0] + 0.5, shoe.pivot[1] + 0.5, s.ex, s.ey - 1, fr, map));
-          pts['ank' + side] = { x: s.ex, y: s.ey - 1 };
+        const d1 = l.d || 0;
+        const vT = seg(len(P[thighN]), l.a, d1);
+        const knee = at(h, vT);
+        pts['knee' + side] = { x: knee.x, y: knee.y };
+        depth['knee' + side] = knee.z - knee.z0;
+        const kT = layer + KZ * (h.z + vT.dz / 2 - h.z0);
+        add(layer, h.z + vT.dz / 2 - h.z0, limbDraw(thighN, h, vT, map), { sub: 1, group, outline: outline(kT) });
+        if (lost['knee' + side]) {
+          stumps.push([knee.x, knee.y, 4, 4]);
+          return;
         }
-        if (front) innerOutline(g, cells, sp.outline);
+        const d2 = d1 + (l.dk || 0);
+        const vS = seg(len(P[shinN]), l.a - l.k, d2);
+        const ank = at(knee, vS);
+        const kS = layer + KZ * (knee.z + vS.dz / 2 - knee.z0);
+        add(layer, knee.z + vS.dz / 2 - knee.z0, limbDraw(shinN, knee, vS, map), { sub: 2, group, outline: outline(kS) });
+        const shoe = P.shoe;
+        const fr = U.clamp(-vS.ang * 0.65 + (l.toe || 0), -0.7, 1.4);
+        add(layer, ank.z - ank.z0, () => stampRot(g, shoe.t, shoe.pivot[0] + 0.5, shoe.pivot[1] + 0.5, ank.x, ank.y - 1, fr, map, { s: persp(ank.z - ank.z0) }), { sub: 3, group, outline: outline(layer + KZ * (ank.z - ank.z0)) });
+        pts['ank' + side] = { x: ank.x, y: ank.y - 1 };
+        depth['ank' + side] = ank.z - ank.z0;
       };
 
-      // Torse d'abord dans une grille à part pour connaître les épaules.
+      // ---------------------------------------------------------- torse
       // Les bras "mains dans les poches" de la fiche sont collés au torse (même cisaillement).
       const tp = P.torso;
-      const tg = Pix.grid(CW, CH);
       const intact = (side) => !lost['arm' + side] && !lost['lo' + side] && !lost['fist' + side];
       const pocketB = (pose.arms[0].hand || 'fist') === 'pocket' && P.pocketB && intact('B');
       const pocketF = (pose.arms[1].hand || 'fist') === 'pocket' && P.pocketF && intact('F');
-      const torsoStamp = (part) => stampTorso(tg, P[part].t, P[part].pivot[0] + 0.5, P[part].pivot[1] + 0.5, hip.x, hip.y, lean, sy, pose.sway || 0, 5, pose.hipLean);
+      // corps tourné : torse enroulé sur son volume (dos au-delà d'un quart de tour)
+      const back = cyw < 0;
+      const torsoStamp = (part, cells) => {
+        const pp = P[part];
+        // les bras dans les poches sont des volumes à part, à la profondeur des épaules
+        const z0 = part === 'torso' ? 0 : part === 'pocketF' ? zF : zB;
+        const wp = turned ? turnPiece(pp.t, pp.t, pp.pivot[0] + 0.5, yaw, part === 'torso' ? TORSO_DEPTH : ARM_DEPTH, z0) : { t: pp.t, ax: pp.pivot[0] + 0.5 };
+        return stampTorso(g, wp.t, wp.ax, pp.pivot[1] + 0.5, hip.x, hip.y, lean, sy, pose.sway || 0, 5, pose.hipLean, cells);
+      };
       // bras avant derrière le torse (tous sauf Djegui) : sa poche passe sous le torse
       const under = sp.frontArm === 'under';
       // bras arrière devant le torse (perso vu de l'autre trois-quarts, comme Valka)
       const backOver = sp.backArm === 'front';
-      if (pocketB && !backOver) torsoStamp('pocketB');
-      let pg = null;
+      // calque du torse : poche arrière (derrière le buste), torse, poches devant ; ses
+      // cellules servent au liseré des bras qui passent dessous
+      let torsoMask = null;
       if (pocketF && under) {
-        pg = Pix.grid(CW, CH);
-        stampTorso(pg, P.pocketF.t, P.pocketF.pivot[0] + 0.5, P.pocketF.pivot[1] + 0.5, hip.x, hip.y, lean, sy, pose.sway || 0, 5, pose.hipLean);
+        add(55, 0, () => {
+          const cells = [];
+          torsoStamp('pocketF', cells);
+          return cells;
+        }, { seam: true });
       }
-      const map = torsoStamp('torso');
-      if (pocketF && !under) torsoStamp('pocketF');
-      if (pocketB && backOver) torsoStamp('pocketB');
-      // liseré sombre là où le bras passe sous le bord du torse
-      const seamUnder = (grid, cells) => {
-        for (const id of cells) {
-          const x = id % CW;
-          const y = (id - x) / CW;
-          if (tg[y][x] !== '.') continue;
-          if ((x > 0 && tg[y][x - 1] !== '.') || (x < CW - 1 && tg[y][x + 1] !== '.') || (y > 0 && tg[y - 1][x] !== '.') || (y < CH - 1 && tg[y + 1][x] !== '.')) grid[y][x] = sp.outline;
-        }
-      };
-      if (pg) {
+      add(60, 0, () => {
         const cells = [];
-        for (let y = 0; y < CH; y++) for (let x = 0; x < CW; x++) if (pg[y][x] !== '.' && tg[y][x] === '.') cells.push(y * CW + x);
-        seamUnder(pg, cells);
-        for (const id of cells) {
-          const x = id % CW;
-          const y = (id - x) / CW;
-          tg[y][x] = pg[y][x];
-        }
-      }
+        // poches derrière le buste, buste, poches devant ; de dos, l'ordre s'inverse
+        const near = [];
+        const far = [];
+        if (pocketB) (backOver ? near : far).push('pocketB');
+        if (pocketF && !under) near.unshift('pocketF');
+        for (const part of back ? near : far) torsoStamp(part, cells);
+        torsoStamp('torso', cells);
+        for (const part of back ? far : near) torsoStamp(part, cells);
+        torsoMask = new Uint8Array(CW * CH);
+        for (const id of cells) torsoMask[id] = 1;
+        return cells;
+      }, { torso: true });
+      // carte de placement (cisaillement du buste) : sert aux épaules, au cou, à la taille
+      const map = stampTorso(Pix.grid(CW, CH), tp.t, tp.pivot[0] + 0.5, tp.pivot[1] + 0.5, hip.x, hip.y, lean0, sy, pose.sway || 0, 5, pose.hipLean);
       const local = (j) => [j[0] - (J.hip[0] - tp.pivot[0]), j[1] - (J.hip[1] - tp.pivot[1])];
-      const shF = map(...local(J.shoulderF));
-      const shB = map(...local(J.shoulderB));
+      const sF2 = map(...local(J.shoulderF));
+      const sB2 = map(...local(J.shoulderB));
       // rotation du buste : l'épaule arrière avance (coup du bras arrière, garde)
       const tw = pose.twist || 0;
-      shB.x += tw * 13;
-      shB.y += tw * 1;
-      shF.x -= tw * 3;
-      const neck = map(...local(J.neck));
-      pts.waist = map(tp.pivot[0], tp.pivot[1] - WAIST);
+      sB2.x += tw * 13;
+      sB2.y += tw * 1;
+      sF2.x -= tw * 3;
+      const zF = under ? -Z_NEAR_ARM : Z_NEAR_ARM;
+      const zB = backOver ? Z_NEAR_ARM : -Z_NEAR_ARM;
+      const shF = root(sF2.x, sF2.y, zF);
+      const shB = root(sB2.x, sB2.y, zB);
+      const neck2 = map(...local(J.neck));
+      const neck = root(neck2.x, neck2.y, Z_HEAD);
+      const w2 = map(tp.pivot[0], tp.pivot[1] - WAIST);
+      pts.waist = { x: root(w2.x, w2.y, 0).x, y: w2.y };
 
+      // ---------------------------------------------------------- bras
       // Bras en 3 pièces : biceps, avant-bras, poing (+ arme dans le poing avant).
       let handF = null;
       let muzzle = null;
-      const drawArm = (arm, front) => {
+      const drawArm = (arm, front, layer) => {
         const side = front ? 'F' : 'B';
         const sh = front ? shF : shB;
-        pts['sh' + side] = sh;
+        const group = ++gid;
+        pts['sh' + side] = { x: sh.x, y: sh.y };
         if (lost['arm' + side]) {
           stumps.push([sh.x, sh.y, 4, 4]);
-          return [];
+          return;
         }
         let hand = arm.hand || 'fist';
         if (hand === 'pocket') {
-          if (front ? pocketF : pocketB) return [];
+          if (front ? pocketF : pocketB) return;
           // bras mutilé : il pend le long du corps
           arm = { a: front ? -0.12 : 0.12, e: front ? 0.2 : -0.2, hand: 'fist' };
           hand = 'fist';
@@ -319,78 +565,131 @@
         const mp = null;
         const upN = front ? 'armUpF' : 'armUpB';
         const loN = front ? 'armLoF' : 'armLoB';
+        const seam = front && under;
+        const lit = front || pose.swap || pose.backArm === 'front' || sp.backArm === 'front';
+        const outline = (k) => lit || k > 60;
         // traînée d'un coup rapide : deux images fantômes de l'avant-bras et du poing le long
         // de la course, sous le bras
         const tr = pose.trail && pose.trail.arms[front ? 1 : 0];
         if (tr && !lost['lo' + side]) {
-          for (const k of [0.35, 0.7]) {
-            const ga = U.lerp(tr.a, arm.a, k);
-            const gf = ga + U.lerp(tr.e, arm.e || 0, k);
-            const ex = sh.x + Math.sin(ga) * len(P[upN]);
-            const ey = sh.y + Math.cos(ga) * len(P[upN]);
-            limb(loN, ex, ey, gf, mp);
-            const hl = len(P[loN]) + 0.5;
-            if (!lost['fist' + side]) stampRot(g, P.fist.t, P.fist.pivot[0] + 0.5, P.fist.pivot[1] + 0.5, ex + Math.sin(gf) * hl, ey + Math.cos(gf) * hl, -gf, mp);
-          }
+          add(layer, 0, () => {
+            const cells = [];
+            for (const k of [0.35, 0.7]) {
+              const ga = U.lerp(tr.a, arm.a, k);
+              const gf = ga + U.lerp(tr.e, arm.e || 0, k);
+              const ex = sh.x + Math.sin(ga) * len(P[upN]);
+              const ey = sh.y + Math.cos(ga) * len(P[upN]);
+              const pl = P[loN];
+              cells.push(...stampRot(g, pl.t, pl.pivot[0] + 0.5, pl.pivot[1] + 0.5, ex, ey, ang0(pl) - gf, mp));
+              const hl = len(pl) + 0.5;
+              if (!lost['fist' + side]) cells.push(...stampRot(g, P.fist.t, P.fist.pivot[0] + 0.5, P.fist.pivot[1] + 0.5, ex + Math.sin(gf) * hl, ey + Math.cos(gf) * hl, -gf, mp));
+            }
+            return cells;
+          }, { sub: 0 });
         }
-        const u = limb(upN, sh.x, sh.y, arm.a, mp);
-        pts['elb' + side] = { x: u.ex, y: u.ey };
-        let cells = u.cells;
+        const d1 = arm.d || 0;
+        const vU = seg(len(P[upN]), arm.a, d1);
+        const elb = at(sh, vU);
+        pts['elb' + side] = { x: elb.x, y: elb.y };
+        depth['elb' + side] = elb.z - elb.z0;
+        const kU = layer + KZ * (sh.z + vU.dz / 2 - sh.z0);
+        add(layer, sh.z + vU.dz / 2 - sh.z0, limbDraw(upN, sh, vU, mp), { sub: 1, group, outline: outline(kU), seam });
         const fa = arm.a + (arm.e || 0);
-        if (lost['lo' + side]) stumps.push([u.ex, u.ey, 3, 3]);
-        else {
-          const lo = limb(loN, u.ex, u.ey, fa, mp);
-          cells = cells.concat(lo.cells);
-          const hl = len(P[loN]) + 0.5;
-          const hx = u.ex + Math.sin(fa) * hl;
-          const hy = u.ey + Math.cos(fa) * hl;
-          pts['wr' + side] = { x: hx, y: hy };
-          if (lost['fist' + side]) stumps.push([lo.ex, lo.ey, 3, 3]);
-          else {
-            const W = sp.weapon;
-            if (front && W && pose.wpn !== 'none' && hand !== 'pocket') {
-              // angle de l'arme : absolu (wabs), ou relatif à l'avant-bras (wr ; par défaut
-              // perpendiculaire comme une épée, dans l'axe pour un pistolet)
-              const wa = pose.wabs !== undefined ? pose.wabs : fa + (pose.wr !== undefined ? pose.wr : W.wr !== undefined ? W.wr : 1.6);
-              const wang = Math.PI - wa;
-              cells = cells.concat(stampRot(g, W.t, W.grip[0] + 0.5, W.grip[1] + 0.5, hx, hy, wang));
-              // bout de l'arme (bouche du canon, pointe) : milieu de la première ligne du gabarit
-              const tx = (W.t[0].length - 1) / 2 - W.grip[0];
-              const ty = -W.grip[1];
-              muzzle = { x: hx + tx * Math.cos(wang) - ty * Math.sin(wang), y: hy + tx * Math.sin(wang) + ty * Math.cos(wang) };
-            }
-            if (hand !== 'pocket') {
-              const f = P.fist;
-              cells = cells.concat(stampRot(g, f.t, f.pivot[0] + 0.5, f.pivot[1] + 0.5, hx, hy, -fa, mp));
-            }
-            if (front) handF = { x: hx, y: hy, ang: fa };
-          }
+        if (lost['lo' + side]) {
+          stumps.push([elb.x, elb.y, 3, 3]);
+          return;
         }
-        if (front || pose.swap || pose.backArm === 'front' || sp.backArm === 'front') innerOutline(g, cells, sp.outline);
-        return cells;
+        const d2 = d1 + (arm.de || 0);
+        const vL = seg(len(P[loN]), fa, d2);
+        const kL = layer + KZ * (elb.z + vL.dz / 2 - elb.z0);
+        add(layer, elb.z + vL.dz / 2 - elb.z0, limbDraw(loN, elb, vL, mp), { sub: 2, group, outline: outline(kL), seam });
+        const vH = seg(len(P[loN]) + 0.5, fa, d2);
+        const hnd = at(elb, vH);
+        pts['wr' + side] = { x: hnd.x, y: hnd.y };
+        depth['wr' + side] = hnd.z - hnd.z0;
+        if (lost['fist' + side]) {
+          stumps.push([elb.x + vL.dx, elb.y + vL.dy, 3, 3]);
+          return;
+        }
+        const dzH = hnd.z - hnd.z0;
+        const kH = layer + KZ * dzH;
+        const sH = persp(dzH);
+        const W = sp.weapon;
+        if (front && W && pose.wpn !== 'none' && hand !== 'pocket') {
+          // angle de l'arme : absolu (wabs), ou relatif à l'avant-bras (wr ; par défaut
+          // perpendiculaire comme une épée, dans l'axe pour un pistolet)
+          const wa = pose.wabs !== undefined ? pose.wabs : fa + (pose.wr !== undefined ? pose.wr : W.wr !== undefined ? W.wr : 1.6);
+          // l'arme tourne avec l'avant-bras : dans son axe (pistolet) elle suit sa profondeur,
+          // en travers (épée) elle reste dans le plan
+          let vW = seg(1, wa, 0);
+          if (d2 || syw) {
+            const cr = Math.cos(wa - fa);
+            const sr = Math.sin(wa - fa);
+            const cd = Math.cos(d2);
+            vW = segV(Math.sin(fa) * cd * cr + Math.cos(fa) * sr, Math.cos(fa) * cd * cr - Math.sin(fa) * sr, Math.sin(d2) * cr);
+          }
+          const wang = Math.PI - vW.ang;
+          const kw = U.clamp(vW.slen, 0.3, 1);
+          add(layer, dzH, () => stampRot(g, W.t, W.grip[0] + 0.5, W.grip[1] + 0.5, hnd.x, hnd.y, wang, null, { k: kw, u: [0, 1], s: sH }), { sub: 3, group, outline: outline(kH), seam });
+          // bout de l'arme (bouche du canon, pointe) : milieu de la première ligne du gabarit
+          const tx = ((W.t[0].length - 1) / 2 - W.grip[0]) * sH;
+          const ty = -W.grip[1] * kw * sH;
+          muzzle = { x: hnd.x + tx * Math.cos(wang) - ty * Math.sin(wang), y: hnd.y + tx * Math.sin(wang) + ty * Math.cos(wang) };
+        }
+        if (hand !== 'pocket') {
+          const f = P.fist;
+          add(layer, dzH, () => stampRot(g, f.t, f.pivot[0] + 0.5, f.pivot[1] + 0.5, hnd.x, hnd.y, -vL.ang, mp, { s: sH }), { sub: 4, group, outline: outline(kH), seam });
+        }
+        if (front) handF = { x: hnd.x, y: hnd.y, ang: vL.ang };
       };
 
+      // rangs du dessin à plat : bras arrière derrière (10), jambes (20, 30), bras avant sous
+      // le torse (40), cheveux (50), torse (55-65), tête (70), bras arrière devant (80), bras
+      // avant (90), bras arrière lancé devant tout (100)
       const backBehind = !pose.swap && pose.backArm !== 'front' && sp.backArm !== 'front';
-      if (backBehind) drawArm(pose.arms[0], false);
+      drawArm(pose.arms[0], false, backBehind ? 10 : pose.swap ? 100 : 80);
       drawLeg(pose.legs[0], false);
       drawLeg(pose.legs[1], true);
-      // bras avant sous le torse (par-dessus les jambes)
-      const armUnder = under ? drawArm(pose.arms[1], true) : null;
-      const headRot = (pose.tilt || 0) + lean * 0.5;
+      drawArm(pose.arms[1], true, under ? 40 : 90);
+      // tête tournée (rotation du corps + headYaw) : enroulée sur son volume, le visage glisse
+      // vers le profil puis laisse place aux cheveux
+      const hyaw = yaw + (pose.headYaw || 0);
+      const hBack = Math.cos(hyaw) < 0;
+      const headRot = (pose.tilt || 0) * Math.cos(hyaw) + lean0 * 0.5 * cyw;
       const hy0 = neck.y + (pose.hy || 0) - (sp.headLift || 0);
+      const hx0 = neck.x + (pose.hx || 0) * cyw;
       if (P.hairBack && !lost.head) {
         const hb = P.hairBack;
+        const { t, ax } = hyaw ? turnPiece(hb.t, hb.t, hb.pivot[0] + 0.5, hyaw, HEAD_DEPTH) : { t: hb.t, ax: hb.pivot[0] + 0.5 };
         // les cheveux pendent (ne suivent qu'en partie la tête) et traînent derrière l'élan
-        stampRot(g, hb.t, hb.pivot[0] + 0.5, hb.pivot[1] + 0.5, neck.x + (pose.hx || 0), hy0, headRot * 0.35 + (pose.hairLag || 0));
+        const rot = headRot * 0.35 + (pose.hairLag || 0);
+        add(hBack ? 75 : 50, 0, () => stampRot(g, t, ax, hb.pivot[1] + 0.5, hx0, hy0, rot));
       }
-      for (let y = 0; y < CH; y++) for (let x = 0; x < CW; x++) if (tg[y][x] !== '.') g[y][x] = tg[y][x];
-      if (armUnder) seamUnder(g, armUnder);
       const hp = P.head;
-      if (!lost.head) stampRot(g, hp.t, hp.pivot[0] + 0.5, hp.pivot[1] + 0.5, neck.x + (pose.hx || 0), hy0, headRot);
-      else stumps.push([neck.x, neck.y - 1, 6, 3]);
-      if (!backBehind && !pose.swap) drawArm(pose.arms[0], false);
-      if (!under) drawArm(pose.arms[1], true);
-      if (pose.swap) drawArm(pose.arms[0], false);
+      if (!lost.head) {
+        const { t, ax } = hyaw ? turnPiece(hp.t, this.headHair() || hp.t, hp.pivot[0] + 0.5, hyaw, HEAD_DEPTH) : { t: hp.t, ax: hp.pivot[0] + 0.5 };
+        add(70, neck.z - neck.z0, () => stampRot(g, t, ax, hp.pivot[1] + 0.5, hx0, hy0, headRot));
+      } else stumps.push([neck.x, neck.y - 1, 6, 3]);
+
+      // ---------------------------------------------------------- dessin, du fond vers l'avant
+      items.sort((a, b) => a.key - b.key || a.n - b.n);
+      const owner = new Int16Array(CW * CH);
+      const seamCells = [];
+      for (const it of items) {
+        const cells = it.draw() || [];
+        for (const id of cells) owner[id] = it.group || 0;
+        if (it.seam && !torsoMask) seamCells.push(...cells);
+        if (it.torso) {
+          // liseré sombre là où un bras passe sous le bord du torse
+          for (const id of seamCells) {
+            if (torsoMask[id]) continue;
+            const x = id % CW;
+            const y = (id - x) / CW;
+            if ((x > 0 && torsoMask[id - 1]) || (x < CW - 1 && torsoMask[id + 1]) || (y > 0 && torsoMask[id - CW]) || (y < CH - 1 && torsoMask[id + CW])) g[y][x] = sp.outline;
+          }
+        }
+        if (it.outline) innerOutline(g, cells, sp.outline, owner, it.group);
+      }
 
       // miroir (pose.mirror) : le perso se retourne autour de l'axe des hanches (vrille d'un
       // coup de pied retourné, d'un tir tournoyant)
@@ -428,6 +727,7 @@
         shB: P1(shB),
         neck: P1(neck),
         hip: P1(hip),
+        depth,
       };
       for (const k of Object.keys(pts)) if (!out[k]) out[k] = P1(pts[k]);
       return out;
@@ -598,6 +898,8 @@
       wabs: p.wabs === undefined ? undefined : q1(p.wabs),
       wpn: p.wpn,
       twist: q1(p.twist),
+      yaw: q1(p.yaw),
+      headYaw: q1(p.headYaw),
       x: Math.round(p.x || 0),
       y: Math.round(p.y || 0),
       lean: q1(p.lean),
@@ -606,8 +908,8 @@
       tilt: q1(p.tilt),
       hx: Math.round(p.hx || 0),
       hy: Math.round(p.hy || 0),
-      legs: p.legs.map((l) => ({ a: q1(l.a), k: q1(l.k), toe: q1(l.toe) })),
-      arms: p.arms.map((a) => ({ a: q1(a.a), e: q1(a.e), hand: a.hand || 'fist' })),
+      legs: p.legs.map((l) => ({ a: q1(l.a), k: q1(l.k), toe: q1(l.toe), d: q1(l.d), dk: q1(l.dk) })),
+      arms: p.arms.map((a) => ({ a: q1(a.a), e: q1(a.e), d: q1(a.d), de: q1(a.de), hand: a.hand || 'fist' })),
       hairLag: q1(p.hairLag),
       trail: p.trail
         ? {
@@ -652,6 +954,8 @@
     wr: p.wr === undefined && q.wr === undefined ? undefined : lerp(p.wr === undefined ? 1.6 : p.wr, q.wr === undefined ? 1.6 : q.wr, t),
     wabs: p.wabs !== undefined && q.wabs !== undefined ? lerp(p.wabs, q.wabs, t) : t < 0.5 ? p.wabs : q.wabs,
     twist: lerp(p.twist || 0, q.twist || 0, t),
+    yaw: lerp(p.yaw || 0, q.yaw || 0, t),
+    headYaw: lerp(p.headYaw || 0, q.headYaw || 0, t),
     x: lerp(p.x || 0, q.x || 0, t),
     y: lerp(p.y || 0, q.y || 0, t),
     lean: lerp(p.lean || 0, q.lean || 0, t),
@@ -660,8 +964,16 @@
     tilt: lerp(p.tilt || 0, q.tilt || 0, t),
     hx: lerp(p.hx || 0, q.hx || 0, t),
     hy: lerp(p.hy || 0, q.hy || 0, t),
-    legs: [0, 1].map((i) => ({ a: lerp(p.legs[i].a, q.legs[i].a, t), k: lerp(p.legs[i].k, q.legs[i].k, t), toe: lerp(p.legs[i].toe || 0, q.legs[i].toe || 0, t) })),
-    arms: [0, 1].map((i) => ({ a: lerp(p.arms[i].a, q.arms[i].a, t), e: lerp(p.arms[i].e || 0, q.arms[i].e || 0, t), hand: t < 0.5 ? p.arms[i].hand : q.arms[i].hand })),
+    legs: [0, 1].map((i) => {
+      const a = p.legs[i];
+      const b = q.legs[i];
+      return { a: lerp(a.a, b.a, t), k: lerp(a.k, b.k, t), toe: lerp(a.toe || 0, b.toe || 0, t), d: lerp(a.d || 0, b.d || 0, t), dk: lerp(a.dk || 0, b.dk || 0, t) };
+    }),
+    arms: [0, 1].map((i) => {
+      const a = p.arms[i];
+      const b = q.arms[i];
+      return { a: lerp(a.a, b.a, t), e: lerp(a.e || 0, b.e || 0, t), d: lerp(a.d || 0, b.d || 0, t), de: lerp(a.de || 0, b.de || 0, t), hand: t < 0.5 ? a.hand : b.hand };
+    }),
   });
 
   // ------------------------------------------------------------ poses-clés
