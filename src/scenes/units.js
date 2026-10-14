@@ -104,7 +104,7 @@
       });
       // capacités
       const abl = [
-        ['ATTAQUE', `${def.attack.hits} coup(s)`, '#a0b0c0'],
+        def.passive ? ['PASSIF', def.passive, GS.mythic(this.t)] : ['ATTAQUE', `${def.attack.hits} coup(s)`, '#a0b0c0'],
         ['COMP. 1', def.skills[0], '#3ee0f0'],
         ['COMP. 2', def.skills[1], '#3ee0f0'],
         ['SPÉCIAL', def.special, '#80f0ff'],

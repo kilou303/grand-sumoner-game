@@ -11,12 +11,23 @@
       id: 'djegui',
       name: 'Djegui',
       title: "L'Ombre Écarlate",
-      rarity: 5,
+      // carte unique ★6 Mythique : la plus rare et la plus cheatée du jeu
+      rarity: 6,
       element: 'dark',
       role: 'attaquant',
       starter: true,
       noGacha: true,
       fxColor: '#ff2a3a',
+      eyeGlow: '#ff2a3a',
+      // passifs (appliqués en combat : src/game/battle.js et src/scenes/battle.js)
+      passive: {
+        name: "Sang de l'Éclipse",
+        desc: 'Vol de vie 18%, CRIT +20%, jauges SP/SL x1.6, insensible aux altérations.',
+        lifesteal: 0.18,
+        crit: 0.2,
+        gauge: 1.6,
+        immune: true,
+      },
       lore: "Un gamin des quartiers, capuche toujours relevée. Depuis la nuit de l'Éclipse, ses yeux brillent de rouge et une force obscure dort dans ses poings.",
       rig: () => GS.Djegui.rig(),
       look: { hair: 'hood', body: 'coat', weapon: 'none', colors: { hair: '#e8e4f0', cape: '#e8e4f0', main: '#e8e4f0', skin: '#5a3426', eye: '#ff2a3a' } },
@@ -30,6 +41,29 @@
     },
 
     // ============================================================ ★5
+    {
+      id: 'toutpuissant',
+      name: 'Tout Puissant',
+      title: "L'Ange du Cosmos",
+      rarity: 5,
+      element: 'light',
+      role: 'mage',
+      fxColor: '#4ab0ff',
+      fxDark: '#06123a',
+      fxScheme: 'water',
+      lore: "Gardien d'un royaume au-delà des étoiles. Il ne se bat presque jamais : quand il lève son bâton, le combat est déjà fini.",
+      // sprites relevés sur sa planche (art/reference/tout_puissant_sheet.png)
+      rig: () => GS.ToutPuissant.rig(),
+      cutin: () => GS.ToutPuissant.frame('big'),
+      look: { hair: 'spiky', body: 'robe', weapon: 'staff', colors: { hair: '#e2e2ee', main: '#82122f', cape: '#82122f', second: '#17131c', skin: '#5a2a20', eye: '#4ab0ff', accent: '#58baf4' } },
+      attack: { hits: 2, anim: 'melee', fx: 'staff' },
+      skills: [
+        { name: 'Sphère Cosmique', mp: 30, target: 'enemy', anim: 'magic', fx: 'galaxy', power: 2.3, hits: 3, desc: "Une boule d'énergie qui explose en galaxie." },
+        { name: 'Méditation Céleste', mp: 40, target: 'allies', anim: 'support', fx: 'meditate', heal: 1.6, effects: [e('regen', 3), e('defUp', 3)], desc: "Il lévite et soigne l'équipe : RÉG et DÉF↑ (3 tours)." },
+      ],
+      special: { name: 'Retour Temporel', target: 'allies', anim: 'support', fx: 'rewind', heal: 2.2, revive: 0.6, effects: [e('atkUp', 3)], desc: "Il remonte le temps : ranime et soigne l'équipe, ATQ↑." },
+      overlimit: { name: 'Jugement Cosmique', target: 'enemies', anim: 'magic', fx: 'cosmos', power: 5.4, hits: 5, effects: [e('defDown', 3, 0.7)], desc: 'Il libère son aura : une galaxie engloutit tous les ennemis.' },
+    },
     {
       id: 'kaelen',
       rigSpec: { head: 'spiky', hair: '#f4e6a8', jacket: '#3a5cc8', pants: '#2a2c48', shoes: '#f0f0f8', skin: '#f2c8a6', eyes: '#3aa0ff', weapon: 'sword', blade: '#f4e4b0', gem: '#ffe060', top: 'jacket', inner: '#f4f0e0', bottom: 'jeans' },
@@ -479,7 +513,7 @@
 
   // Statistiques au niveau donné (+6% par éveil).
   GS.unitStats = (def, level = 1, awaken = 0) => {
-    const base = { 3: { hp: 1400, atk: 170, def: 80, mp: 120 }, 4: { hp: 1800, atk: 220, def: 100, mp: 150 }, 5: { hp: 2300, atk: 285, def: 125, mp: 200 } }[def.rarity];
+    const base = { 3: { hp: 1400, atk: 170, def: 80, mp: 120 }, 4: { hp: 1800, atk: 220, def: 100, mp: 150 }, 5: { hp: 2300, atk: 285, def: 125, mp: 200 }, 6: { hp: 3300, atk: 420, def: 180, mp: 260 } }[def.rarity];
     const role = GS.ROLES[def.role];
     const lv = 1 + 0.035 * (level - 1);
     const aw = 1 + 0.06 * awaken;

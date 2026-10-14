@@ -116,8 +116,8 @@
     F().draw(U.fmt(d.gems), x + cw - 3, y, { color: '#a0e0ff', align: 'right' });
   };
 
-  // Cadre aux couleurs de la rareté (★5 = arc-en-ciel animé).
-  UI.rarityColor = (r, t = 0, off = 0) => (r === 5 ? GS.rainbow(t, off) : GS.RARITY[r].color);
+  // Cadre aux couleurs de la rareté (★5 = arc-en-ciel animé, ★6 = écarlate pulsant).
+  UI.rarityColor = (r, t = 0, off = 0) => (r >= 6 ? GS.mythic(t, off) : r === 5 ? GS.rainbow(t, off) : (GS.RARITY[r] || GS.RARITY[3]).color);
 
   UI.spriteOf = (def) => GS.HeroArt.build(def.id, def.look);
 
@@ -176,16 +176,20 @@
     R.gradV(x + 1, y + 1, w - 2, h - 2, U.rgba(el.dark, 0.9), 'rgba(6,10,20,0.95)');
     R.frame(x, y, w, h, col);
     if (o.selected) R.frame(x + 1, y + 1, w - 2, h - 2, '#ffffff');
+    // carte Mythique : double cadre rouge et noir qui pulse
+    const mythic = def.rarity >= 6;
+    if (mythic && !o.selected) R.frame(x + 1, y + 1, w - 2, h - 2, U.rgba('#ff2a3a', 0.35 + Math.sin(t * 5) * 0.25));
     if (GS.Art.char(def).rig) GS.Art.portrait(def, x + 1, y + 1, w - 2, h - 10, o.scale || 1, { focusY: 12 });
     else UI.portrait(def, x + 1, y + 1, w - 2, h - 10, (o.scale || 1) * 2, { focusY: 17 });
     GS.Icons.draw(def.element, x + 2, y + 2);
     R.rect(x + 1, y + h - 9, w - 2, 8, 'rgba(0,0,0,0.6)');
     if (o.level !== undefined) F().draw('NV' + o.level, x + 3, y + h - 8, { color: '#ffffff' });
-    const st = GS.Icons.get('star');
+    const st = GS.Icons.get(mythic ? 'starRed' : 'star');
     if (o.stars !== false) {
       const n = def.rarity;
-      const sx = x + w - 2 - n * 5 - 2;
-      for (let i = 0; i < n; i++) GS.ctx.drawImage(st, sx + i * 5, y + h - 9);
+      const step = n >= 6 ? 4 : 5;
+      const sx = x + w - 2 - n * step - 2;
+      for (let i = 0; i < n; i++) GS.ctx.drawImage(st, sx + i * step, y + h - 9);
     }
     if (o.awaken) F().draw('+' + o.awaken, x + w - 3, y + 3, { color: '#ffe060', align: 'right', outline: '#000' });
     if (o.tag) {

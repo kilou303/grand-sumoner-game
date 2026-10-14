@@ -22,6 +22,8 @@
     3: { name: 'Rare', color: '#5aa8ff', glow: '#c8e4ff', maxLv: 40 },
     4: { name: 'Épique', color: '#ffc83a', glow: '#fff0b0', maxLv: 60 },
     5: { name: 'Légendaire', color: '#ff70d0', glow: '#ffffff', maxLv: 80, rainbow: true },
+    // carte unique : Djegui, la plus rare et la plus puissante du jeu
+    6: { name: 'Mythique', color: '#ff2a3a', glow: '#ffb0b8', maxLv: 100, mythic: true },
   };
 
   GS.ROLES = {
@@ -30,6 +32,12 @@
     tank: { name: 'Gardien', hp: 1.32, atk: 0.85, def: 1.38, spd: 88 },
     soutien: { name: 'Soutien', hp: 0.95, atk: 0.88, def: 1.0, spd: 105 },
     vitesse: { name: 'Assassin', hp: 0.86, atk: 1.02, def: 0.86, spd: 120 },
+  };
+
+  // Écarlate pulsant (★6 Mythique) : du rouge sang au rouge vif presque blanc.
+  GS.mythic = (t, off = 0) => {
+    const p = (Math.sin(t * 5 + off * 0.05) + 1) / 2;
+    return `hsl(${352 + p * 6},100%,${42 + p * 26}%)`;
   };
 
   // Couleur arc-en-ciel animée (★5).

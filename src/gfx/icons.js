@@ -13,6 +13,8 @@
     gem: { t: ['..aaaaa..', '.abcccba.', 'abbcccbba', 'aaaaaaaaa', '.abbcbba.', '..abcba..', '...aba...', '....a....'], p: { a: '#2a90ff', b: '#70d0ff', c: '#e8ffff' } },
     gold: { t: ['..aaaa..', '.abbbba.', 'abbcbbba', 'abcbbbba', 'abbbbbba', 'abbbbcba', '.abbbba.', '..aaaa..'], p: { a: '#c08010', b: '#ffd040', c: '#fff8c0' } },
     star: { t: ['...a...', '...a...', '..aba..', 'aabbbaa', '.abbba.', '.ab.ba.', 'a.....a'], p: { a: '#ffc020', b: '#fff080' } },
+    // étoile écarlate des cartes ★6 Mythique
+    starRed: { t: ['...a...', '...a...', '..aba..', 'aabbbaa', '.abbba.', '.ab.ba.', 'a.....a'], p: { a: '#d0102a', b: '#ff8a96' } },
     sword: { t: ['......a', '.....ab', '....ab.', 'c..ab..', '.cab...', '.cc....', 'c..c...'], p: { a: '#c8d0e0', b: '#ffffff', c: '#e0a040' } },
     heart: { t: ['.aa.aa.', 'abbabba', 'abbbbba', '.abbba.', '..aba..', '...a...'], p: { a: '#e02040', b: '#ff6080' } },
     sound: { t: ['...a....', '..aa..a.', 'aaaa...a', 'aaaa.a.a', 'aaaa...a', '..aa..a.', '...a....'], p: { a: '#e8fbff' } },
@@ -39,7 +41,7 @@
 
   // Étoiles de rareté.
   I.stars = (n, x, y, o = {}) => {
-    const c = I.get('star');
+    const c = I.get(n >= 6 ? 'starRed' : 'star');
     const sp = o.spacing || c.width;
     const t = o.t || 0;
     for (let i = 0; i < n; i++) {

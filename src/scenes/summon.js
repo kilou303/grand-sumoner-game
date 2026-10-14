@@ -5,7 +5,7 @@
   const R = GS.R;
   const F = () => GS.Font;
   const UI = () => GS.UI;
-  const RCOL = { 3: '#5aa8ff', 4: '#ffc83a', 5: '#ff70d0' };
+  const RCOL = { 3: '#5aa8ff', 4: '#ffc83a', 5: '#ff70d0', 6: '#ff2a3a' };
 
   class SummonScene {
     enter() {

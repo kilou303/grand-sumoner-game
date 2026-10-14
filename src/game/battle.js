@@ -62,7 +62,8 @@
       return this.spd * (this.has('spdUp') ? 1.3 : 1);
     }
     critRate() {
-      return (this.isHero ? 0.1 : 0.05) + (this.has('critUp') ? 0.25 : 0);
+      const p = this.def && this.def.passive;
+      return (this.isHero ? 0.1 : 0.05) + (this.has('critUp') ? 0.25 : 0) + ((p && p.crit) || 0);
     }
     turnLen() {
       return TURN / this.effSpd();
@@ -237,6 +238,8 @@
   // Applique un statut (rafraîchit la durée s'il existe déjà).
   B.addStatus = (tgt, eff, src) => {
     if (!tgt.alive) return false;
+    // passif : insensible aux altérations (brûlure, poison, étourdissement, baisses)
+    if (tgt.def && tgt.def.passive && tgt.def.passive.immune && GS.STATUS[eff.type] && GS.STATUS[eff.type].bad) return false;
     let chance = eff.chance === undefined ? 1 : eff.chance;
     if (tgt.boss && eff.type === 'stun') chance *= 0.4;
     if (Math.random() > chance) return false;
