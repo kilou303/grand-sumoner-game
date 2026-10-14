@@ -392,6 +392,19 @@
       if (!under) drawArm(pose.arms[1], true);
       if (pose.swap) drawArm(pose.arms[0], false);
 
+      // miroir (pose.mirror) : le perso se retourne autour de l'axe des hanches (vrille d'un
+      // coup de pied retourné, d'un tir tournoyant)
+      if (pose.mirror) {
+        const ax = 2 * ROOT_X;
+        for (const row of g) {
+          const src = row.slice();
+          for (let x = 0; x < CW; x++) row[x] = ax - x >= 0 && ax - x < CW ? src[ax - x] : '.';
+        }
+        const flip = (p) => p && Object.assign(p, { x: ax - p.x });
+        for (const p of new Set([shF, shB, neck, hip, handF, muzzle].concat(Object.values(pts)))) flip(p);
+        if (handF) handF.ang = -handF.ang;
+        for (const st of stumps) st[0] = ax - st[0];
+      }
       const canvas = Pix.render(g, sp.art.pal, { outlineColor: sp.outlineColor || '#050307' });
       // moignons sanglants
       if (stumps.length) {
@@ -579,6 +592,7 @@
   function quant(p) {
     return {
       swap: !!p.swap,
+      mirror: !!p.mirror,
       backArm: p.backArm || 'behind',
       wr: p.wr === undefined ? undefined : q1(p.wr),
       wabs: p.wabs === undefined ? undefined : q1(p.wabs),
@@ -623,7 +637,7 @@
     });
     const legs = p.legs.map((l, i) => {
       const b = q.legs[i];
-      return Math.max(l.a, b.a) > 1.0 && Math.abs(l.a - b.a) > SMEAR ? { a: b.a, k: b.k } : null;
+      return Math.min(l.a, b.a) > 0.6 && Math.abs(l.a - b.a) > SMEAR ? { a: b.a, k: b.k } : null;
     });
     if (arms.some(Boolean) || legs.some(Boolean)) out.trail = { arms, legs };
     return out;
@@ -632,6 +646,7 @@
   const lerp = U.lerp;
   M.blend = (p, q, t) => ({
     swap: t < 0.5 ? p.swap : q.swap,
+    mirror: t < 0.5 ? p.mirror : q.mirror,
     backArm: t < 0.5 ? p.backArm : q.backArm,
     wpn: t < 0.5 ? p.wpn : q.wpn,
     wr: p.wr === undefined && q.wr === undefined ? undefined : lerp(p.wr === undefined ? 1.6 : p.wr, q.wr === undefined ? 1.6 : q.wr, t),
@@ -823,6 +838,17 @@
   M.HIT = { jab: 0.12, cross: 0.12, uppercut: 0.15, kick: 0.13, airKick: 0.22, power: 0.22, cast: 0.15, slashA: 0.13, slashB: 0.12, thrust: 0.13, shoot: 0.23, castStaff: 0.15, fire: 0.12, gcast: 0.15 };
 
   M.seqDur = (name) => SEQ[name].reduce((s, k) => s + k[1], 0);
+
+  // Coups décrits en données (src/data/moves.js) : { poses: {nom: pose}, seq: [[pose, durée,
+  // courbe?], ...], hit: index du segment au bout duquel le coup touche }.
+  M.addMoves = (defs) => {
+    for (const [name, d] of Object.entries(defs)) {
+      Object.assign(K, d.poses || {});
+      if (!d.seq) continue;
+      SEQ[name] = d.seq;
+      M.HIT[name] = d.seq.slice(1, (d.hit || 1) + 1).reduce((s, k) => s + k[1], 0);
+    }
+  };
 
   // ------------------------------------------------------------ interpolation
   // Les animations sont échantillonnées à 30 images/s (rendu image par image, cache des poses)

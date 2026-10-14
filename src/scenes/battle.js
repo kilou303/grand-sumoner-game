@@ -73,7 +73,8 @@
       });
       // poses pré-calculées petit à petit (pas de saccade au premier coup)
       this.warm = [];
-      for (const h of this.heroes) if (h.rig) this.warmUp(h, ['idle', 'walk', 'run', 'stance', 'hurt', 'jab', 'cross', 'uppercut', 'kick', 'airKick', 'slashA', 'slashB', 'thrust', 'fire', 'cast', 'jump', 'land', 'victory']);
+      const movesOf = (def) => [].concat(def.style ? GS.STYLES[def.style].moves.concat(GS.STYLES[def.style].finish) : [], ...[def.special, def.overlimit].concat(def.skills).map((ab) => (ab && ab.moves) || []));
+      for (const h of this.heroes) if (h.rig) this.warmUp(h, ['idle', 'walk', 'run', 'stance', 'hurt', 'hurtLow', 'hurtAir', 'jab', 'cross', 'uppercut', 'kick', 'airKick', 'slashA', 'slashB', 'thrust', 'fire', 'cast', 'jump', 'land', 'victory'].concat(movesOf(h.def)));
       this.enemies = [];
       this.groups = [];
       this.pickups = [];
@@ -141,7 +142,7 @@
         const f = B.enemyFighter(k, el, this.stage.level, j, [g.x + (p[0] - 240) * 1.2 + 40, 196 + (p[1] - 136) * 0.9]);
         f.dir = -1;
         f.at = Math.random() * 3;
-        if (f.rig) this.warmUp(f, ['stance', 'run', 'hurt', 'jab', 'cross', 'slashA', 'slashB', 'thrust', 'cast', 'jump']);
+        if (f.rig) this.warmUp(f, ['stance', 'run', 'hurt', 'hurtLow', 'hurtAir', 'jab', 'cross', 'slashA', 'slashB', 'thrust', 'cast', 'jump']);
         return f;
       });
       for (const e of this.enemies) {
@@ -606,16 +607,7 @@
       tgt.flash = 1;
       tgt.flashColor = '#ffffff';
       tgt.kx = (tgt.isHero ? -1 : 1) * (r.crit ? 7 : 4) * (o.knock || 1);
-      if (tgt.rig && tgt.alive && !tgt.busy) {
-        tgt.anim = 'hurt';
-        tgt.at = 0;
-        this.co.run(
-          (function* () {
-            yield 0.36;
-            if (tgt.alive && !tgt.busy && tgt.anim === 'hurt') tgt.anim = 'stance';
-          })()
-        );
-      }
+      this.react(tgt, o.react || 'high');
       const big = r.crit || frac >= 0.5;
       let color = '#ffffff';
       let label = null;
@@ -821,7 +813,9 @@
       let tgt = targets[0];
       const d = this.dirOf(f);
       const hits = ab.hits || 1;
-      const combo = COMBOS[Math.min(6, hits)] || COMBOS[3];
+      // coups signature de la capacité, sinon enchaînement du style du héros (src/data/moves.js)
+      const combo = ab.moves || (f.def.style ? GS.comboOf(f.def.style, hits) : COMBOS[Math.min(6, hits)] || COMBOS[3]);
+      const finisher = ab === f.def.special || ab === f.def.overlimit;
       const reach = tgt.sprite.w * (tgt.boss ? 0.32 : 0.42) + 16;
       yield* this.dashTo(f, tgt.x - d * reach, tgt.y + 1, 0.2);
       const sc = this.schemeOf(f, ab);
@@ -832,33 +826,105 @@
           tgt = alt[0];
         }
         const move = combo[i % combo.length];
+        const meta = GS.MOVES[move] || {};
+        const last = i === hits - 1;
         f.anim = move;
         f.at = 0;
         const hitT = MR.HIT[move];
         yield hitT;
-        A().sfx('slash', 1 + i * 0.06);
-        if (move === 'jab' && this.weaponOf(f) === 'pistol') this.muzzleFlash(f);
+        A().sfx(meta.kind === 'kick' ? 'heavy' : 'slash', 1 + i * 0.06);
+        if (meta.shot || (move === 'jab' && this.weaponOf(f) === 'pistol')) {
+          const m = this.muzzleFlash(f);
+          this.fx.projectile(m.x, m.y, tgt.cx, tgt.cy - (tgt.jump || 0), { color: this.elemColor(f, ab), kind: 'bullet', dur: 0.06, size: 1 });
+        }
+        // hauteur de l'impact selon le coup (la cible peut être en l'air)
+        const react = meta.react || 'high';
         const hx = tgt.cx - d * 6;
-        const hy = move === 'uppercut' ? tgt.cy - 8 : move === 'airKick' || move === 'kick' ? tgt.cy - 2 : tgt.cy;
-        const big = move === 'uppercut' || move === 'airKick' || i === hits - 1;
+        const hy = tgt.cy - (tgt.jump || 0) + (react === 'low' ? 5 : react === 'launch' || meta.kind === 'head' ? -8 : meta.kind === 'kick' ? -2 : 0);
+        const big = react === 'launch' || react === 'bounce' || last;
+        const up = react === 'launch';
+        const down = react === 'bounce';
+        if (last && finisher) this.finisher(tgt);
         this.fx.crescent(hx, hy, {
           r: big ? 26 : 18,
-          angle: move === 'uppercut' ? -1.3 : move === 'kick' || move === 'airKick' ? 0.35 : 0.05,
+          angle: up ? -1.3 : down ? 1.25 : meta.kind === 'kick' ? 0.35 : 0.05,
           span: big ? 2.6 : 1.8,
-          dir: move === 'uppercut' ? -1 : 1,
+          dir: up ? -1 : 1,
           scheme: sc,
-          flat: move === 'uppercut' ? 0.9 : 0.5,
+          flat: up || down ? 0.9 : 0.5,
           tilt: move === 'cross' ? -0.2 : 0.15,
           dur: 0.22,
         });
         this.fx.impact(hx + d * 4, hy, { scheme: sc, big, spark: sc === 'blood' ? '#ff5a8a' : undefined });
-        if (move === 'airKick') this.fx.speedLines(hx, hy, { dir: d, n: 12 });
-        this.strike(f, tgt, ab, 1 / hits, { knock: big ? 1.6 : 1 });
+        if (big) this.fx.speedLines(hx, hy, { dir: d, n: 12 });
+        this.strike(f, tgt, ab, 1 / hits, { knock: big ? 1.6 : 1, react });
         const rest = MR.seqDur(move) - hitT;
-        yield i === hits - 1 ? rest : Math.min(rest, 0.12);
+        yield last ? rest : Math.min(rest, 0.12);
       }
       yield 0.1;
       yield* this.dashBack(f);
+    }
+
+    // ---------------------------------------------------------------- réactions
+    // Réaction de la cible : 'high' touchée en haut, 'low' pliée en deux, 'launch' envoyée en
+    // l'air (et reprise en l'air par les coups suivants), 'bounce' écrasée au sol puis rebond.
+    react(tgt, kind) {
+      if (!tgt.alive) return;
+      const air = (tgt.jump || 0) > 1 || tgt.airTok;
+      if (kind === 'launch' && !tgt.boss) this.co.run(this.launch(tgt, air ? 14 : 30));
+      else if (kind === 'bounce' && !tgt.boss) this.co.run(this.bounce(tgt));
+      if (!tgt.rig || tgt.busy) return;
+      const inAir = (kind === 'launch' && !tgt.boss) || air;
+      tgt.anim = inAir ? 'hurtAir' : kind === 'low' || kind === 'bounce' ? 'hurtLow' : 'hurt';
+      tgt.at = 0;
+      if (!inAir) this.backToStance(tgt, kind === 'low' ? 0.42 : 0.36);
+    }
+    backToStance(tgt, delay) {
+      this.co.run(
+        function* () {
+          yield delay;
+          if (tgt.alive && !tgt.busy && !tgt.airTok && /^a?hurt/.test(tgt.anim)) tgt.anim = 'stance';
+        }.call(this)
+      );
+    }
+    *launch(tgt, h) {
+      const tok = (tgt.airTok = (tgt.airTok || 0) + 1);
+      const top = Math.min(56, (tgt.jump || 0) + h);
+      yield* GS.tween(tgt, { jump: top }, 0.22, E.outQuad);
+      if (tgt.airTok !== tok) return;
+      yield 0.1;
+      if (tgt.airTok !== tok) return;
+      yield* GS.tween(tgt, { jump: 0 }, 0.07 + top / 260, E.inQuad);
+      if (tgt.airTok !== tok) return;
+      yield* this.land(tgt, 7);
+    }
+    *bounce(tgt) {
+      const tok = (tgt.airTok = (tgt.airTok || 0) + 1);
+      if ((tgt.jump || 0) > 0) yield* GS.tween(tgt, { jump: 0 }, 0.09, E.inQuad);
+      if (tgt.airTok !== tok) return;
+      yield* this.land(tgt, 11);
+    }
+    // contact avec le sol : poussière, petit rebond, puis la cible se relève
+    *land(tgt, h) {
+      const tok = tgt.airTok;
+      this.fx.dust(tgt.x, tgt.y, { n: 8 });
+      this.shake(3);
+      A().sfx('heavy', 0.8);
+      if (tgt.rig && tgt.alive && !tgt.busy) {
+        tgt.anim = 'hurtLow';
+        tgt.at = 0;
+      }
+      yield* GS.tween(tgt, { jump: h }, 0.1, E.outQuad);
+      yield* GS.tween(tgt, { jump: 0 }, 0.12, E.inQuad);
+      if (tgt.airTok === tok) tgt.airTok = 0;
+      this.backToStance(tgt, 0.25);
+    }
+    // Coup final d'un spécial : zoom sur la cible et ralenti.
+    finisher(tgt) {
+      this.slowmo = 0.5;
+      this.zoom = { x: tgt.cx, y: tgt.cy - (tgt.jump || 0), t: 0, dur: 0.9, k: 1.4 };
+      this.screenFlash = Math.max(this.screenFlash || 0, 0.35);
+      this.flashColor = '#ffffff';
     }
 
     // Overlimit de Djegui : pose de pouvoir, aura rouge, explosion de ténèbres.
@@ -1380,6 +1446,15 @@
         this.hitstop -= dt;
         wdt *= 0.1;
       }
+      // coup final : ralenti et zoom
+      if (this.slowmo > 0) {
+        this.slowmo -= dt;
+        wdt *= 0.3;
+      }
+      if (this.zoom) {
+        this.zoom.t += dt;
+        if (this.zoom.t >= this.zoom.dur) this.zoom = null;
+      }
       if (this.mode === 'explore' && !this.ended) this.updateExplore(dt);
       this.handleMenu();
       this.co.update(wdt);
@@ -1647,6 +1722,17 @@
     draw(ctx) {
       const shx = this.cam.shake ? U.rand(-1, 1) * this.cam.shake : 0;
       const shy = this.cam.shake ? U.rand(-1, 1) * this.cam.shake * 0.6 : 0;
+      ctx.save();
+      const z = this.zoom;
+      if (z) {
+        // monte vite, tient, puis revient
+        const p = z.t / z.dur;
+        const k = 1 + (z.k - 1) * (p < 0.15 ? E.outQuad(p / 0.15) : p > 0.7 ? 1 - E.inOutQuad((p - 0.7) / 0.3) : 1);
+        const fx = z.x - this.cam.x;
+        ctx.translate(fx, z.y);
+        ctx.scale(k, k);
+        ctx.translate(-fx, -z.y);
+      }
       GS.BG.draw(this.area.bg, this.t, this.cam.x + shx, shy);
       ctx.save();
       ctx.translate(Math.round(-this.cam.x + shx), Math.round(shy));
@@ -1682,6 +1768,7 @@
       this.fx.draw(ctx, false);
       this.drawTargetCursor();
       this.fx.drawPops();
+      ctx.restore();
       ctx.restore();
       ctx.drawImage(vignette(), 0, 0);
       if (this.screenFlash > 0) {
