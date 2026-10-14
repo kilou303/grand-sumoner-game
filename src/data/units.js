@@ -73,7 +73,7 @@
         { name: 'Déferlante', mp: 30, target: 'enemy', anim: 'brawl', moves: ['jab', 'cross', 'elbow', 'roundhouse'], fx: 'water', power: 2.0, hits: 4, delay: 15, desc: 'Rafale de coups portés comme des vagues : retarde le tour ennemi.' },
         { name: 'Souffle du Ressac', mp: 30, target: 'self', anim: 'support', fx: 'buff', effects: [e('spdUp', 3), e('critUp', 3)], desc: 'VIT↑ et CRITIQUE↑ pour soi (3 tours).' },
       ],
-      special: { name: 'Typhon de Poings', target: 'enemy', anim: 'brawl', moves: ['jab', 'cross', 'backfist', 'sweep', 'roundhouse', 'spinKick'], fx: 'water', power: 3.7, hits: 6, crit: 0.25, desc: 'Six coups tourbillonnants, critiques fréquents.' },
+      special: { name: 'Typhon de Poings', target: 'enemy', anim: 'brawl', moves: ['jab', 'cross', 'backfist', 'sweep', 'roundhouse', 'tornado'], fx: 'water', power: 3.7, hits: 6, crit: 0.25, desc: 'Six coups tourbillonnants, critiques fréquents.' },
       overlimit: { name: 'Raz-de-Marée Azur', target: 'enemies', anim: 'magic', fx: 'tsunami', power: 5.3, hits: 5, effects: [e('defDown', 3)], desc: 'Une vague géante déferle sur tous les ennemis + DÉF↓.' },
     },
 
@@ -114,10 +114,10 @@
       style: 'capoeira',
       attack: { hits: 3, anim: 'brawl', fx: 'punch' },
       skills: [
-        { name: 'Rafale de Pétales', mp: 30, target: 'enemy', anim: 'brawl', moves: ['kick', 'roundhouse', 'sweep', 'spinKick', 'airKick'], fx: 'earth', power: 2.1, hits: 5, desc: 'Une volée de coups rapides comme des pétales au vent.' },
+        { name: 'Rafale de Pétales', mp: 30, target: 'enemy', anim: 'brawl', moves: ['kick', 'roundhouse', 'sweep', 'backKick', 'airKick'], fx: 'earth', power: 2.1, hits: 5, desc: 'Une volée de coups rapides comme des pétales au vent.' },
         { name: 'Esprit Combatif', mp: 30, target: 'self', anim: 'support', fx: 'rage', effects: [e('atkUp', 3), e('critUp', 3)], desc: 'ATQ↑ et CRITIQUE↑ pour soi (3 tours).' },
       ],
-      special: { name: 'Uppercut du Printemps', target: 'enemy', anim: 'brawl', moves: ['roundhouse', 'spinKick', 'axeKick', 'uppercut'], fx: 'earth', power: 3.8, hits: 4, crit: 0.15, effects: [e('stun', 1, 0.4)], desc: 'Enchaînement conclu par un uppercut, 40% d’étourdissement.' },
+      special: { name: 'Uppercut du Printemps', target: 'enemy', anim: 'brawl', moves: ['roundhouse', 'tornado', 'axeKick', 'uppercut'], fx: 'earth', power: 3.8, hits: 4, crit: 0.15, effects: [e('stun', 1, 0.4)], desc: 'Enchaînement conclu par un uppercut, 40% d’étourdissement.' },
       overlimit: { name: 'Tempête de Cerisiers', target: 'enemies', anim: 'magic', fx: 'quake', power: 5.2, hits: 5, effects: [e('atkUp', 3, 1, 'allies')], desc: "Un tourbillon de pétales et de coups frappe tous les ennemis + ATQ↑ équipe." },
     },
 
@@ -504,10 +504,11 @@
       role: 'tank',
       lore: 'Boxeur de la salle du quartier. Il a mis K.O. un fléau à mains nues avant même de savoir ce que c’était.',
       look: { hair: 'short', body: 'tunic', weapon: 'none', colors: { hair: '#1a1410', main: '#f0f0f0', second: '#2a2a2a', skin: '#8a5a3a', eye: '#301810' } },
+      style: 'boxe',
       attack: { hits: 3, anim: 'brawl', fx: 'punch' },
       skills: [
         { name: 'Garde Haute', mp: 25, target: 'self', anim: 'support', fx: 'shield', effects: [e('defUp', 3), e('taunt', 2)], desc: 'DÉF↑ et attire les coups (2 tours).' },
-        { name: 'Crochet Sismique', mp: 30, target: 'enemy', anim: 'brawl', fx: 'earth', power: 2.0, hits: 3, effects: [e('stun', 1, 0.3)], desc: '30% d’étourdir.' },
+        { name: 'Crochet Sismique', mp: 30, target: 'enemy', anim: 'brawl', moves: ['hook', 'hook', 'camPunch'], fx: 'earth', power: 2.0, hits: 3, effects: [e('stun', 1, 0.3)], desc: '30% d’étourdir.' },
       ],
       special: { name: 'Combo du Quartier', target: 'enemy', anim: 'brawl', fx: 'heavy', power: 3.0, hits: 5, desc: 'Cinq coups lourds.' },
       overlimit: { name: 'Uppercut Tellurique', target: 'enemies', anim: 'magic', fx: 'quake', power: 3.8, hits: 3, effects: [e('defUp', 3, 1, 'allies')], desc: 'Le sol se soulève + DÉF↑ à l’équipe.' },

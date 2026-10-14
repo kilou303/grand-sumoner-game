@@ -491,8 +491,10 @@
       const turned = yaw !== 0;
       // le corps penché vers l'avant, vu tourné : l'inclinaison à l'écran suit le cosinus
       const lean = lean0 * cyw;
-      const PD = M.PERSP;
-      const persp = (dz) => (PD > 0 && dz ? U.clamp(PD / (PD - dz), 0.8, 1.25) : 1);
+      // pose.cam : caméra rapprochée le temps d'un coup (poing lancé sur l'écran)
+      const PD = pose.cam || M.PERSP;
+      const pmax = pose.cam ? 1.7 : 1.25;
+      const persp = (dz) => (PD > 0 && dz ? U.clamp(PD / (PD - dz), 0.8, pmax) : 1);
       // hauteur de hanche : le pied le plus bas touche le sol (sauf en l'air : pose.y < 0)
       const ext = (l, side) => {
         if (lost['leg' + side]) return -1;
@@ -546,7 +548,8 @@
           stumps.push([h.x, h.y + 1, 5, 3]);
           return;
         }
-        const map = front ? null : this.shade;
+        // la jambe la plus loin de la caméra est assombrie (la jambe arrière, sauf corps tourné)
+        const map = (turned ? h.z < 0 : !front) ? this.shade : null;
         const thighN = front ? 'thighF' : 'thighB';
         const shinN = front ? 'shinF' : 'shinB';
         const outline = (k) => front || k > 60;
@@ -575,8 +578,7 @@
         pts['knee' + side] = { x: knee.x, y: knee.y };
         depth['knee' + side] = knee.z - knee.z0;
         zs['knee' + side] = knee.z;
-        const kT = layer + KZ * (h.z + vT.dz / 2 - h.z0);
-        add(layer, h.z + vT.dz / 2 - h.z0, limbDraw(thighN, h, vT, map), { sub: 1, group, outline: outline(kT) });
+        add(layer, h.z + vT.dz / 2 - h.z0, limbDraw(thighN, h, vT, map), { sub: 1, group, olf: outline });
         if (lost['knee' + side]) {
           stumps.push([knee.x, knee.y, 4, 4]);
           return;
@@ -584,11 +586,10 @@
         const d2 = d1 + (l.dk || 0);
         const vS = seg(len(P[shinN]), l.a - l.k, d2);
         const ank = at(knee, vS);
-        const kS = layer + KZ * (knee.z + vS.dz / 2 - knee.z0);
-        add(layer, knee.z + vS.dz / 2 - knee.z0, limbDraw(shinN, knee, vS, map), { sub: 2, group, outline: outline(kS) });
+        add(layer, knee.z + vS.dz / 2 - knee.z0, limbDraw(shinN, knee, vS, map), { sub: 2, group, olf: outline });
         const shoe = P.shoe;
         const fr = U.clamp(-vS.ang * 0.65 + (l.toe || 0), -0.7, 1.4);
-        add(layer, ank.z - ank.z0, () => stampRot(g, shoe.t, shoe.pivot[0] + 0.5, shoe.pivot[1] + 0.5, ank.x, ank.y - 1, fr, map, { s: persp(ank.z - ank.z0) }), { sub: 3, group, outline: outline(layer + KZ * (ank.z - ank.z0)) });
+        add(layer, ank.z - ank.z0, () => stampRot(g, shoe.t, shoe.pivot[0] + 0.5, shoe.pivot[1] + 0.5, ank.x, ank.y - 1, fr, map, { s: persp(ank.z - ank.z0) }), { sub: 3, group, olf: outline });
         pts['ank' + side] = { x: ank.x, y: ank.y - 1 };
         depth['ank' + side] = ank.z - ank.z0;
         zs['ank' + side] = ank.z;
@@ -719,8 +720,7 @@
         pts['elb' + side] = { x: elb.x, y: elb.y };
         depth['elb' + side] = elb.z - elb.z0;
         zs['elb' + side] = elb.z;
-        const kU = layer + KZ * (sh.z + vU.dz / 2 - sh.z0);
-        add(layer, sh.z + vU.dz / 2 - sh.z0, limbDraw(upN, sh, vU, mp), { sub: 1, group, outline: outline(kU), seam });
+        add(layer, sh.z + vU.dz / 2 - sh.z0, limbDraw(upN, sh, vU, mp), { sub: 1, group, olf: outline, seam });
         const fa = arm.a + (arm.e || 0);
         if (lost['lo' + side]) {
           stumps.push([elb.x, elb.y, 3, 3]);
@@ -728,8 +728,7 @@
         }
         const d2 = d1 + (arm.de || 0);
         const vL = seg(len(P[loN]), fa, d2);
-        const kL = layer + KZ * (elb.z + vL.dz / 2 - elb.z0);
-        add(layer, elb.z + vL.dz / 2 - elb.z0, limbDraw(loN, elb, vL, mp), { sub: 2, group, outline: outline(kL), seam });
+        add(layer, elb.z + vL.dz / 2 - elb.z0, limbDraw(loN, elb, vL, mp), { sub: 2, group, olf: outline, seam });
         const vH = seg(len(P[loN]) + 0.5, fa, d2);
         const hnd = at(elb, vH);
         pts['wr' + side] = { x: hnd.x, y: hnd.y };
@@ -740,9 +739,11 @@
           return;
         }
         const dzH = hnd.z - hnd.z0;
-        const kH = layer + KZ * dzH;
         const sH = persp(dzH);
         const W = sp.weapon;
+        // prise de l'arme : au milieu du poing (qui recouvre la poignée), pas au poignet
+        const fc = len(P.fist) * 0.5 * sH;
+        const grip = { x: hnd.x + Math.sin(vL.ang) * fc, y: hnd.y + Math.cos(vL.ang) * fc };
         if (front && W && pose.wpn !== 'none' && hand !== 'pocket') {
           // angle de l'arme : absolu (wabs), ou relatif à l'avant-bras (wr ; par défaut
           // perpendiculaire comme une épée, dans l'axe pour un pistolet)
@@ -758,15 +759,15 @@
           }
           const wang = Math.PI - vW.ang;
           const kw = U.clamp(vW.slen, 0.3, 1);
-          add(layer, dzH, () => stampRot(g, W.t, W.grip[0] + 0.5, W.grip[1] + 0.5, hnd.x, hnd.y, wang, null, { k: kw, u: [0, 1], s: sH }), { sub: 3, group, outline: outline(kH), seam });
+          add(layer, dzH, () => stampRot(g, W.t, W.grip[0] + 0.5, W.grip[1] + 0.5, grip.x, grip.y, wang, null, { k: kw, u: [0, 1], s: sH }), { sub: 3, group, olf: outline, seam });
           // bout de l'arme (bouche du canon, pointe) : milieu de la première ligne du gabarit
           const tx = ((W.t[0].length - 1) / 2 - W.grip[0]) * sH;
           const ty = -W.grip[1] * kw * sH;
-          muzzle = { x: hnd.x + tx * Math.cos(wang) - ty * Math.sin(wang), y: hnd.y + tx * Math.sin(wang) + ty * Math.cos(wang) };
+          muzzle = { x: grip.x + tx * Math.cos(wang) - ty * Math.sin(wang), y: grip.y + tx * Math.sin(wang) + ty * Math.cos(wang) };
         }
         if (hand !== 'pocket') {
           const f = P.fist;
-          add(layer, dzH, () => stampRot(g, f.t, f.pivot[0] + 0.5, f.pivot[1] + 0.5, hnd.x, hnd.y, -vL.ang, mp, { s: sH }), { sub: 4, group, outline: outline(kH), seam });
+          add(layer, dzH, () => stampRot(g, f.t, f.pivot[0] + 0.5, f.pivot[1] + 0.5, hnd.x, hnd.y, -vL.ang, mp, { s: sH }), { sub: 4, group, olf: outline, seam });
         }
         if (front) handF = { x: hnd.x, y: hnd.y, ang: vL.ang };
       };
@@ -805,7 +806,16 @@
       } else stumps.push([neck.x, neck.y - 1, 6, 3]);
 
       // ---------------------------------------------------------- dessin, du fond vers l'avant
-      items.sort((a, b) => a.key - b.key || a.n - b.n);
+      // un membre (bras + arme, jambe) passe d'un bloc devant ou derrière le torse : rang de sa
+      // pièce la plus proche de la caméra (sinon le poing peut passer derrière le torse alors
+      // que l'avant-bras reste devant) ; ses pièces sont triées entre elles par profondeur
+      const gkey = {};
+      for (const it of items) if (it.group) gkey[it.group] = Math.max(gkey[it.group] === undefined ? -Infinity : gkey[it.group], it.key);
+      for (const it of items) {
+        it.rank = it.group ? gkey[it.group] : it.key;
+        if (it.olf) it.outline = it.olf(it.rank);
+      }
+      items.sort((a, b) => a.rank - b.rank || (a.group || 0) - (b.group || 0) || a.key - b.key || a.n - b.n);
       const owner = new Int16Array(CW * CH);
       const seamCells = [];
       for (const it of items) {
@@ -925,7 +935,8 @@
           x += Math.sin(fa) * (len(lo) + 0.5);
           y += Math.cos(fa) * (len(lo) + 0.5);
         }
-        if (side === 'F' && sp.weapon) stampRot(g, sp.weapon.t, sp.weapon.grip[0] + 0.5, sp.weapon.grip[1] + 0.5, x, y, Math.PI - (fa + (sp.weapon.wr !== undefined ? sp.weapon.wr : 1.6)));
+        const fc = len(P.fist) * 0.5;
+        if (side === 'F' && sp.weapon) stampRot(g, sp.weapon.t, sp.weapon.grip[0] + 0.5, sp.weapon.grip[1] + 0.5, x + Math.sin(fa) * fc, y + Math.cos(fa) * fc, Math.PI - (fa + (sp.weapon.wr !== undefined ? sp.weapon.wr : 1.6)));
         stampRot(g, P.fist.t, P.fist.pivot[0] + 0.5, P.fist.pivot[1] + 0.5, x, y, -fa);
       };
       const leg = (from) => {
@@ -1035,6 +1046,7 @@
       // ramenée entre -π et π : un tour complet retombe exactement sur la pose de face
       yaw: q1((p.yaw || 0) - 2 * Math.PI * Math.round((p.yaw || 0) / (2 * Math.PI))),
       headYaw: q1(p.headYaw),
+      cam: p.cam ? Math.round(p.cam / 4) * 4 : 0,
       x: Math.round(p.x || 0),
       y: Math.round(p.y || 0),
       lean: q1(p.lean),
@@ -1066,15 +1078,18 @@
     const out = Object.assign({}, p);
     out.hairLag = U.clamp(0.09 * vx - 0.9 * dl - 0.03 * vy, -0.7, 0.7);
     out.sway = (p.sway || 0) + U.clamp(-0.5 * vx, -2, 2);
-    // seulement pour un coup : bras lancé vers l'avant ou le haut, jambe levée devant
+    // seulement pour un coup : bras lancé vers l'avant ou le haut, jambe levée devant ; la
+    // traînée est dessinée à plat : pas pour un membre en profondeur ni un corps tourné
+    const flat = (l) => Math.abs(l.d || 0) + Math.abs(l.de || l.dk || 0) < 0.15;
+    const plane = Math.abs(Math.sin(p.yaw || 0)) < 0.3 && Math.abs(Math.sin(q.yaw || 0)) < 0.3;
     const fast = (a, b) => Math.max(a.a, b.a) > 0.9 && Math.abs(a.a - b.a) + 0.5 * Math.abs((a.e || 0) - (b.e || 0)) > SMEAR;
     const arms = p.arms.map((a, i) => {
       const b = q.arms[i];
-      return (a.hand || 'fist') !== 'pocket' && (b.hand || 'fist') !== 'pocket' && fast(a, b) ? { a: b.a, e: b.e || 0 } : null;
+      return plane && flat(a) && flat(b) && (a.hand || 'fist') !== 'pocket' && (b.hand || 'fist') !== 'pocket' && fast(a, b) ? { a: b.a, e: b.e || 0 } : null;
     });
     const legs = p.legs.map((l, i) => {
       const b = q.legs[i];
-      return Math.min(l.a, b.a) > 0.6 && Math.abs(l.a - b.a) > SMEAR ? { a: b.a, k: b.k } : null;
+      return plane && flat(l) && flat(b) && Math.min(l.a, b.a) > 0.6 && Math.abs(l.a - b.a) > SMEAR ? { a: b.a, k: b.k } : null;
     });
     if (arms.some(Boolean) || legs.some(Boolean)) out.trail = { arms, legs };
     return out;
@@ -1097,6 +1112,7 @@
     twist: lerp(p.twist || 0, q.twist || 0, t),
     yaw: lerpAng(p.yaw || 0, q.yaw || 0, t),
     headYaw: lerp(p.headYaw || 0, q.headYaw || 0, t),
+    cam: p.cam || q.cam ? lerp(p.cam || M.PERSP, q.cam || M.PERSP, t) : 0,
     x: lerp(p.x || 0, q.x || 0, t),
     y: lerp(p.y || 0, q.y || 0, t),
     lean: lerp(p.lean || 0, q.lean || 0, t),
