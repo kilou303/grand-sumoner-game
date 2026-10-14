@@ -18,7 +18,9 @@
     sound: { t: ['...a....', '..aa..a.', 'aaaa...a', 'aaaa.a.a', 'aaaa...a', '..aa..a.', '...a....'], p: { a: '#e8fbff' } },
     mute: { t: ['...a....', '..aa....', 'aaaa.a.a', 'aaaa..a.', 'aaaa.a.a', '..aa....', '...a....'], p: { a: '#ff7080' } },
     lock: { t: ['.aaa.', 'a...a', 'a...a', 'bbbbb', 'bbcbb', 'bbcbb', 'bbbbb'], p: { a: '#a0a8b8', b: '#e0b040', c: '#5a3a10' } },
-    crown: { t: ['a..a..a', 'aa.a.aa', 'abababa', 'bbbbbbb', 'acacaca'], p: { a: '#ffd040', b: '#e0a020', c: '#ff4060' } },
+    armor: { t: ['.a...a.', 'aba.aba', 'abbbbba', 'abbcbba', '.abcba.', '.abbba.', '.aaaaa.'], p: { a: '#6a7898', b: '#b8c4dc', c: '#f0f4ff' } },
+    ring: { t: ['...b...', '..bcb..', '.a.b.a.', 'a.....a', 'a.....a', '.a...a.', '..aaa..'], p: { a: '#e0a020', b: '#40e0ff', c: '#ffffff' } },
+        crown: { t: ['a..a..a', 'aa.a.aa', 'abababa', 'bbbbbbb', 'acacaca'], p: { a: '#ffd040', b: '#e0a020', c: '#ff4060' } },
   };
 
   const cache = {};

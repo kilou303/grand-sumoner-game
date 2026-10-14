@@ -144,6 +144,22 @@ const fs = require('fs');
   await page.evaluate(() => GS.go(new GS.TeamScene()));
   await page.waitForTimeout(700);
   await shot('22_equipe');
+  await page.evaluate(() => GS.go(new GS.EquipScene()));
+  await page.waitForTimeout(700);
+  await shot('23_equipement');
+  await page.evaluate(() => GS.Scenes.current.setTab('weapon'));
+  await page.waitForTimeout(300);
+  await shot('24_inventaire');
+  await page.evaluate(() => GS.go(new GS.ShopScene()));
+  await page.waitForTimeout(700);
+  await shot('25_boutique');
+  await page.evaluate(() => {
+    const s = new GS.SummonScene();
+    s.mode = 'equip';
+    GS.go(s);
+  });
+  await page.waitForTimeout(700);
+  await shot('26_invocation_equipement');
 
   console.log(errors.length ? errors.join('\n---\n') : 'aucune erreur');
   await browser.close();
