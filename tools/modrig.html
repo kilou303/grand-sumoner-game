@@ -7,6 +7,9 @@
 <script src="../src/gfx/modrig.js"></script>
 <script src="../src/gfx/djegui_art.js"></script>
 <script src="../src/gfx/djegui.js"></script>
+<script src="../src/gfx/heads.js"></script>
+<script src="../src/gfx/outfits.js"></script>
+<script src="../src/gfx/variants.js"></script>
 <script src="../src/gfx/azura_art.js"></script>
 <script src="../src/gfx/azura.js"></script>
 <script src="../src/gfx/vesper_art.js"></script>
@@ -36,7 +39,10 @@
   };
   const mode = q.get('m') || 'cycles';
   const cyc = (n) => { const C = GS.ModRig.CYCLES[n]; const o = []; for (let i = 0; i < C.frames; i++) o.push(ch.frame(C.pose(i / C.frames))); return o; };
+  // m=anims&a=stance,fire : chaque animation (avec l'animMap du perso) en n images
+  const seq = (n, k) => { const M = GS.ModRig; const nm = (ch.spec.animMap || {})[n] || n; const d = M.SEQ[nm] ? M.seqDur(nm) : M.CYCLES[nm] ? M.CYCLES[nm].dur : 1; const o = []; for (let i = 0; i < k; i++) o.push(ch.anim(n, (d * i) / (k - 1 || 1))); return o; };
   if (mode === 'cycles') { row('idle', cyc('idle')); row('walk', cyc('walk')); row('run', cyc('run')); }
+  else if (mode === 'anims') for (const n of (q.get('a') || 'stance,fire,jab').split(',')) row(n, seq(n, +(q.get('n') || 6)));
   else {
     const names = Object.keys(GS.ModRig.KEY);
     const per = +(q.get('n') || 8);

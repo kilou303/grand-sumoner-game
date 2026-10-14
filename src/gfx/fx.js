@@ -286,7 +286,7 @@
       });
     }
 
-    // Projectile de (x0,y0) à (x1,y1). kind : orb | arrow | kunai | rock
+    // Projectile de (x0,y0) à (x1,y1). kind : orb | arrow | kunai | harpoon | bullet | rock
     projectile(x0, y0, x1, y1, o = {}) {
       const color = o.color || '#ffffff';
       const dur = o.dur || 0.3;
@@ -309,12 +309,12 @@
         },
         draw(ctx) {
           const s = o.size || 3;
-          if (o.kind === 'arrow' || o.kind === 'kunai' || o.kind === 'harpoon') {
+          if (o.kind === 'arrow' || o.kind === 'kunai' || o.kind === 'harpoon' || o.kind === 'bullet') {
             ctx.save();
             ctx.translate(Math.round(this.x), Math.round(this.y));
             ctx.rotate(this.ang || 0);
-            const l = o.kind === 'harpoon' ? 18 : o.kind === 'kunai' ? 6 : 12;
-            R.rect(-l, 0, l, 1, o.kind === 'kunai' ? '#c0c8d8' : '#c8a070');
+            const l = o.kind === 'harpoon' ? 18 : o.kind === 'kunai' ? 6 : o.kind === 'bullet' ? 9 : 12;
+            R.rect(-l, 0, l, 1, o.kind === 'kunai' ? '#c0c8d8' : o.kind === 'bullet' ? '#fff4c0' : '#c8a070');
             R.rect(0, -1, 3, 3, '#e8f0ff');
             if (o.kind === 'arrow') R.rect(-l, -1, 2, 3, '#ffffff');
             ctx.globalCompositeOperation = 'lighter';

@@ -175,6 +175,7 @@
     const w = spec.weapon;
     if (!w) return ['jab', 'cross'][i];
     if (w === 'bow') return 'shoot';
+    if (w === 'pistol') return i ? 'jab' : 'fire';
     if (w === 'staff') return i ? 'castStaff' : 'slashA';
     if (w === 'spear' || w === 'rapier') return 'thrust';
     return i ? 'slashB' : 'slashA';

@@ -159,6 +159,10 @@
         tone({ f: 900, f2: 1800, dur: 0.08, type: 'pulse0.25', vol: 0.08 });
         noise({ f: 2500, f2: 5000, dur: 0.08, filter: 'highpass', vol: 0.12 });
         break;
+      case 'gun':
+        noise({ f: 3000, f2: 400, dur: 0.12, vol: 0.32 });
+        tone({ f: 160, f2: 50, dur: 0.12, type: 'square', vol: 0.12 });
+        break;
       case 'magic':
         arp([523, 784, 1047, 1568], 0.04, { type: 'triangle', vol: 0.12, dur: 0.2 });
         noise({ f: 6000, dur: 0.3, filter: 'highpass', vol: 0.06 });

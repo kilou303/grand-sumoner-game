@@ -73,7 +73,7 @@
       });
       // poses pré-calculées petit à petit (pas de saccade au premier coup)
       this.warm = [];
-      for (const h of this.heroes) if (h.rig) this.warmUp(h, ['idle', 'walk', 'run', 'stance', 'hurt', 'jab', 'cross', 'uppercut', 'kick', 'airKick', 'slashA', 'slashB', 'thrust', 'cast', 'jump', 'land', 'victory']);
+      for (const h of this.heroes) if (h.rig) this.warmUp(h, ['idle', 'walk', 'run', 'stance', 'hurt', 'jab', 'cross', 'uppercut', 'kick', 'airKick', 'slashA', 'slashB', 'thrust', 'fire', 'cast', 'jump', 'land', 'victory']);
       this.enemies = [];
       this.groups = [];
       this.pickups = [];
@@ -749,10 +749,26 @@
     weaponOf(f) {
       return f.rig && f.art.rig.spec.weapon ? f.art.rig.spec.weapon.kind : null;
     }
-    // Coup de mêlée d'un héros modulaire selon son arme.
+    // Bouche du canon (pistolet) dans la pose courante, en coordonnées du monde.
+    muzzleOf(f) {
+      const d = this.dirOf(f);
+      const fr = f.rig ? f.art.frame(f.anim, f.at) : null;
+      if (!fr || !fr.muzzle) return { x: f.cx + d * 14, y: f.cy - 2 };
+      const rs = f.rscale || 1;
+      const s = f.dir < 0 || f.flip ? -1 : 1;
+      return { x: f.x + f.offX + (f.kx || 0) + (fr.muzzle.x - fr.foot.x) * rs * s, y: f.y + f.offY - (f.jump || 0) + (fr.muzzle.y - fr.foot.y) * rs };
+    }
+    muzzleFlash(f) {
+      const m = this.muzzleOf(f);
+      this.fx.flash(m.x, m.y, { color: '#ffe080', r: 6 });
+      this.fx.burst(m.x, m.y, { n: 5, color: ['#fff4c0', '#ffb040'], speed: 70, life: 0.12, jitter: 20, add: true });
+      A().sfx('gun');
+      return m;
+    }
+    // Coup de mêlée d'un héros modulaire selon son arme (au pistolet : aux poings).
     meleeMove(f, i, thrust) {
       const w = this.weaponOf(f);
-      if (!w) return i % 2 ? 'cross' : 'jab';
+      if (!w || w === 'pistol') return i % 2 ? 'cross' : 'jab';
       if (thrust || w === 'spear' || w === 'rapier') return 'thrust';
       return i % 2 ? 'slashB' : 'slashA';
     }
@@ -821,6 +837,7 @@
         const hitT = MR.HIT[move];
         yield hitT;
         A().sfx('slash', 1 + i * 0.06);
+        if (move === 'jab' && this.weaponOf(f) === 'pistol') this.muzzleFlash(f);
         const hx = tgt.cx - d * 6;
         const hy = move === 'uppercut' ? tgt.cy - 8 : move === 'airKick' || move === 'kick' ? tgt.cy - 2 : tgt.cy;
         const big = move === 'uppercut' || move === 'airKick' || i === hits - 1;
@@ -964,7 +981,8 @@
         f.flip = !f.flip;
         f.weaponRot = (i % 2 ? -2 : 2) * d;
         if (f.rig) {
-          f.anim = this.weaponOf(f) ? (i % 2 ? 'slashB' : 'slashA') : i % 2 ? 'kick' : 'cross';
+          const blade = this.weaponOf(f) && this.weaponOf(f) !== 'pistol';
+          f.anim = blade ? (i % 2 ? 'slashB' : 'slashA') : i % 2 ? 'kick' : 'cross';
           f.at = MR.HIT[f.anim] * 0.8;
         }
         A().sfx('slash', 0.9 + Math.random() * 0.3);
@@ -985,17 +1003,18 @@
 
     *animRanged(f, ab, targets) {
       const d = this.dirOf(f);
+      const gun = this.weaponOf(f) === 'pistol';
       if (f.rig) {
         const bow = this.weaponOf(f) === 'bow';
-        f.anim = bow ? 'shoot' : 'cast';
+        f.anim = bow ? 'shoot' : gun ? 'fire' : 'cast';
         f.at = 0;
-        yield bow ? MR.HIT.shoot : 0.12;
+        yield bow ? MR.HIT.shoot : gun ? MR.HIT.fire : 0.12;
       }
-      yield* GS.tween(f, { offX: -5 * d }, 0.1);
+      if (!gun) yield* GS.tween(f, { offX: -5 * d }, 0.1);
       const hits = ab.hits || 1;
       const col = this.elemColor(f, ab);
       const tasks = [];
-      const kind = ab.fx === 'kunai' ? 'kunai' : ab.fx === 'harpoon' ? 'harpoon' : ab.fx === 'rock' ? 'rock' : ab.fx === 'arrow' || ab.fx === 'arrows' || ab.fx === 'beam' ? 'arrow' : 'orb';
+      const kind = ab.fx === 'kunai' ? 'kunai' : ab.fx === 'harpoon' ? 'harpoon' : ab.fx === 'rock' ? 'rock' : ab.fx === 'bullet' ? 'bullet' : ab.fx === 'arrow' || ab.fx === 'arrows' || ab.fx === 'beam' ? 'arrow' : 'orb';
       if (ab.fx === 'beam') {
         const tgt = targets[0];
         A().sfx('light');
@@ -1022,11 +1041,12 @@
       } else {
         for (let i = 0; i < hits; i++) {
           const list = ab.target === 'enemies' || ab.target === 'heroes' ? targets : [targets[0]];
+          const m = gun ? this.muzzleFlash(f) : null;
           for (const t of list) {
             const rain = ab.fx === 'arrows';
-            const sx = rain ? t.cx + U.rand(-30, 10) * d : f.cx + d * 12;
-            const sy = rain ? -10 : f.cy - 2;
-            const p = this.fx.projectile(sx, sy, t.cx + U.rand(-4, 4), t.cy + U.rand(-5, 5), { color: col, kind, dur: rain ? 0.28 : 0.2, arc: kind === 'rock' ? 18 : 0, size: 2 });
+            const sx = rain ? t.cx + U.rand(-30, 10) * d : m ? m.x : f.cx + d * 12;
+            const sy = rain ? -10 : m ? m.y : f.cy - 2;
+            const p = this.fx.projectile(sx, sy, t.cx + U.rand(-4, 4), t.cy + U.rand(-5, 5), { color: col, kind, dur: rain ? 0.28 : gun ? 0.12 : 0.2, arc: kind === 'rock' ? 18 : 0, size: gun ? 1 : 2 });
             tasks.push(
               this.co.run(
                 function* () {
@@ -1042,10 +1062,15 @@
               )
             );
           }
-          A().sfx('shoot');
+          if (!gun) A().sfx('shoot');
           if (f.rig && this.weaponOf(f) === 'bow' && hits <= 4 && i < hits - 1) {
             f.anim = 'shoot';
             f.at = MR.HIT.shoot - 0.04;
+          }
+          // au pistolet : recul puis retour en joue entre deux tirs
+          if (gun && i < hits - 1) {
+            f.anim = 'fire';
+            f.at = MR.HIT.fire;
           }
           yield hits > 4 ? 0.06 : 0.12;
         }

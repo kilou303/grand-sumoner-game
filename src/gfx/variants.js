@@ -95,6 +95,13 @@
       grip: [4, 33],
       t: ['...ccc...', '..c...C..', '.c.....C.', 'c..vvv..C', 'c.vVvvv.C', 'c.vvvvv.C', 'c.vvvvv.C', 'c..vvv..C', '.c.....C.', '..c...C..', '...cgC...', '...gGg...', '...gGg...', '....g....', '....y....', '....Y....', '....y....', '....Y....', '....y....', '....Y....', '....y....', '....Y....', '....g....', '....y....', '....Y....', '....y....', '....Y....', '....y....', '....Y....', '....y....', '....k....', '....k....', '....k....', '....k....', '....Y....', '....y....', '....Y....', '....g....', '....y....', '....Y....', '....y....', '....Y....', '....y....', '...ggg...'],
     },
+    // pistolet : canon dans l'axe de l'avant-bras (wr = 0), crosse sur la droite du gabarit
+    // (vers le bas une fois l'arme pointée devant) ; z = diodes lumineuses.
+    pistol: {
+      grip: [4, 9],
+      wr: 0,
+      t: ['.DD...', 'DLMD..', 'DLMD..', 'DLzD..', 'DLMD..', 'DLMDD.', 'DLMDvD', 'DLMvVv', 'DMMvVv', 'DzMvVv', '.DDvVv', '...vvv'],
+    },
     bow: {
       grip: [3, 15],
       t: ['..oo.....', '.o..W....', 'o...W....', 'o....W...', 'O....W...', 'o.....W..', 'O.....W..', 'o......W.', 'O......W.', 'o......W.', 'O......W.', 'o......W.', 'O......W.', 'k......W.', 'k......W.', 'k......W.', 'k......W.', 'O......W.', 'o......W.', 'O......W.', 'o......W.', 'O......W.', 'o......W.', 'O.....W..', 'o.....W..', 'O....W...', 'o....W...', 'o...W....', '.o..W....', '..oo.....'],
@@ -348,17 +355,32 @@
       if (!done.has(p)) done.set(p, { pivot: p.pivot, end: p.end, t: toKeys(p.g) });
       out[n] = done.get(p);
     }
-    // arme
-    let weapon = null;
-    if (spec.weapon && WEAPONS[spec.weapon]) {
-      const w = WEAPONS[spec.weapon];
-      const wc = Object.assign({}, WCOL, { z: spec.gem || '#60f0ff', Z: '#ffffff' });
-      if (spec.halo) Object.assign(wc, { c: U.shade(spec.halo, -0.2), C: U.shade(spec.halo, 0.45) });
-      if (spec.shaft) Object.assign(wc, { y: spec.shaft, Y: U.shade(spec.shaft, -0.35) });
-      if (spec.blade) Object.assign(wc, { L: U.shade(spec.blade, 0.5), M: spec.blade, D: U.shade(spec.blade, -0.4) });
-      weapon = { grip: w.grip, t: w.t.map((row) => [...row].map((ch) => (ch === '.' ? '.' : keyOf(wc[ch] || '#ff00ff'))).join('')), kind: spec.weapon };
-    }
-    return { pal, parts: out, weapon, joints: fit.joints };
+    return { pal, parts: out, weapon: V.weapon(spec, keyOf), joints: fit.joints };
+  };
+
+  // Arme d'une description (spec.weapon + couleurs gem, halo, shaft, blade), convertie dans la
+  // palette du personnage par keyOf(couleur) -> clé. Sert aussi aux héros relevés sur image.
+  V.weapon = (spec, keyOf) => {
+    const w = spec.weapon && WEAPONS[spec.weapon];
+    if (!w) return null;
+    const wc = Object.assign({}, WCOL, { z: spec.gem || '#60f0ff', Z: '#ffffff' });
+    if (spec.halo) Object.assign(wc, { c: U.shade(spec.halo, -0.2), C: U.shade(spec.halo, 0.45) });
+    if (spec.shaft) Object.assign(wc, { y: spec.shaft, Y: U.shade(spec.shaft, -0.35) });
+    if (spec.blade) Object.assign(wc, { L: U.shade(spec.blade, 0.5), M: spec.blade, D: U.shade(spec.blade, -0.4) });
+    const t = w.t.map((row) => [...row].map((ch) => (ch === '.' ? '.' : keyOf(wc[ch] || '#ff00ff'))).join(''));
+    return { grip: w.grip, t, kind: spec.weapon, wr: w.wr };
+  };
+  // keyOf pour une palette existante { clé: couleur } : réutilise une clé de même couleur,
+  // sinon en ajoute une.
+  V.paletteKeys = (pal) => {
+    let next = 0x4f00;
+    return (hex) => {
+      for (const k of Object.keys(pal)) if (pal[k].toLowerCase() === hex.toLowerCase()) return k;
+      while (pal[String.fromCharCode(next)]) next++;
+      const k = String.fromCharCode(next++);
+      pal[k] = hex;
+      return k;
+    };
   };
 
   // Articulations par défaut (doudoune de la fiche).
@@ -379,18 +401,19 @@
     });
   V.makeChar = makeChar;
 
-  let ARMED_MAP = null;
   // Personnage modulaire à partir d'une description libre (ennemis humains).
   const specArt = {};
   // Nouvelle instance à chaque appel (chaque ennemi perd ses propres membres), art partagé.
-  V.charSpec = (key, spec) => makeChar(specArt[key] || (specArt[key] = V.build(spec)), spec, spec.weapon ? ARMED_MAP : {});
+  V.charSpec = (key, spec) => makeChar(specArt[key] || (specArt[key] = V.build(spec)), spec, spec.weapon ? V.animMapFor(spec) : {});
 
   // ------------------------------------------------------------ personnages
   const chars2 = {};
   // Styles de combat : correspondance des animations génériques vers celles avec arme.
-  const ARMED = (ARMED_MAP = { idle: 'aidle', stance: 'astance', walk: 'awalk', run: 'arun', victory: 'avictory', cast: 'castStaff', hurt: 'ahurt', ko: 'ako', jump: 'ajump', land: 'aland' });
+  const ARMED = { idle: 'aidle', stance: 'astance', walk: 'awalk', run: 'arun', victory: 'avictory', cast: 'castStaff', hurt: 'ahurt', ko: 'ako', jump: 'ajump', land: 'aland' };
   const BOW = Object.assign({}, ARMED, { cast: 'castStaff' });
-  V.animMapFor = (spec) => (spec.weapon ? (spec.weapon === 'bow' ? BOW : ARMED) : {});
+  // pistolet : repos, garde, marche et sort arme en main ; le reste comme les autres armes
+  const GUN = Object.assign({}, ARMED, { idle: 'gidle', stance: 'gstance', walk: 'gwalk', cast: 'gcast' });
+  V.animMapFor = (spec) => (spec.weapon ? (spec.weapon === 'bow' ? BOW : spec.weapon === 'pistol' ? GUN : ARMED) : {});
   V.char = (id) => {
     if (chars2[id]) return chars2[id];
     const spec = GS.UNIT[id].rigSpec;

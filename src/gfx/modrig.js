@@ -244,6 +244,7 @@
 
       // Bras en 3 pièces : biceps, avant-bras, poing (+ arme dans le poing avant).
       let handF = null;
+      let muzzle = null;
       const drawArm = (arm, front) => {
         const side = front ? 'F' : 'B';
         const sh = front ? shF : shB;
@@ -278,8 +279,15 @@
           else {
             const W = sp.weapon;
             if (front && W && pose.wpn !== 'none' && hand !== 'pocket') {
-              const wa = pose.wabs !== undefined ? pose.wabs : fa + (pose.wr !== undefined ? pose.wr : 1.6);
-              cells = cells.concat(stampRot(g, W.t, W.grip[0] + 0.5, W.grip[1] + 0.5, hx, hy, Math.PI - wa));
+              // angle de l'arme : absolu (wabs), ou relatif à l'avant-bras (wr ; par défaut
+              // perpendiculaire comme une épée, dans l'axe pour un pistolet)
+              const wa = pose.wabs !== undefined ? pose.wabs : fa + (pose.wr !== undefined ? pose.wr : W.wr !== undefined ? W.wr : 1.6);
+              const wang = Math.PI - wa;
+              cells = cells.concat(stampRot(g, W.t, W.grip[0] + 0.5, W.grip[1] + 0.5, hx, hy, wang));
+              // bout de l'arme (bouche du canon, pointe) : milieu de la première ligne du gabarit
+              const tx = (W.t[0].length - 1) / 2 - W.grip[0];
+              const ty = -W.grip[1];
+              muzzle = { x: hx + tx * Math.cos(wang) - ty * Math.sin(wang), y: hy + tx * Math.sin(wang) + ty * Math.cos(wang) };
             }
             if (hand !== 'pocket') {
               const f = P.fist;
@@ -330,6 +338,7 @@
       const out = {
         canvas,
         hand: handF ? { x: handF.x + 1, y: handF.y + 1, ang: handF.ang } : null,
+        muzzle: P1(muzzle),
         head: { x: neck.x + 1, y: neck.y - 9 + 1 },
         shF: P1(shF),
         shB: P1(shB),
@@ -398,7 +407,7 @@
           x += Math.sin(fa) * (len(lo) + 0.5);
           y += Math.cos(fa) * (len(lo) + 0.5);
         }
-        if (side === 'F' && sp.weapon) stampRot(g, sp.weapon.t, sp.weapon.grip[0] + 0.5, sp.weapon.grip[1] + 0.5, x, y, Math.PI - (fa + 1.6));
+        if (side === 'F' && sp.weapon) stampRot(g, sp.weapon.t, sp.weapon.grip[0] + 0.5, sp.weapon.grip[1] + 0.5, x, y, Math.PI - (fa + (sp.weapon.wr !== undefined ? sp.weapon.wr : 1.6)));
         stampRot(g, P.fist.t, P.fist.pivot[0] + 0.5, P.fist.pivot[1] + 0.5, x, y, -fa);
       };
       const leg = (from) => {
@@ -588,6 +597,18 @@
   };
   Object.assign(K, ARM_POSES);
 
+  // poses au pistolet (canon dans l'axe de l'avant-bras, wr relatif) ; le poing arrière
+  // reste en garde devant la poitrine
+  const GUARD_B = { a: 0.5, e: 1.9, hand: 'fist' };
+  Object.assign(K, {
+    gidle: { legs: [{ a: -0.14, k: 0.06 }, { a: 0.16, k: 0.06 }], arms: [PK, { a: 0.2, e: 0.45 }], wr: 0.75 },
+    gstance1: { lean: 0.05, x: -1, legs: [{ a: -0.42, k: 0.38 }, { a: 0.34, k: 0.46 }], arms: [GUARD_B, { a: 0.75, e: 0.55 }], wr: 0.3 },
+    gstance2: { lean: 0.03, x: -1, y: 1, squash: -0.02, legs: [{ a: -0.44, k: 0.48 }, { a: 0.36, k: 0.56 }], arms: [GUARD_B, { a: 0.7, e: 0.6 }], wr: 0.3 },
+    aim: { lean: 0.02, x: -1, twist: 0.2, legs: [{ a: -0.5, k: 0.3 }, { a: 0.42, k: 0.4 }], arms: [{ a: 0.8, e: 1.7, hand: 'fist' }, { a: 1.57, e: 0.0 }], wr: 0 },
+    recoil: { lean: -0.08, x: -3, twist: 0.1, legs: [{ a: -0.52, k: 0.34 }, { a: 0.4, k: 0.42 }], arms: [{ a: 0.7, e: 1.8, hand: 'fist' }, { a: 1.95, e: -0.15 }], wr: 0 },
+    gcast: { lean: -0.04, legs: [{ a: -0.3, k: 0.15 }, { a: 0.3, k: 0.2 }], arms: [PK, { a: 2.9, e: 0.1 }], wr: 0 },
+  });
+
   // ------------------------------------------------------------ cycles
   const TAU = Math.PI * 2;
   const CYCLES = (M.CYCLES = {
@@ -659,6 +680,13 @@
     pose: (p) => withWeapon(CYCLES.run.pose(p), { a: -0.5 + Math.sin(p * TAU) * 0.2, e: 0.9 }, { wabs: -2.3 }),
   };
 
+  CYCLES.gstance = { frames: 6, dur: 1.2, pose: (p) => M.blend(K.gstance1, K.gstance2, (1 - Math.cos(p * TAU)) / 2) };
+  CYCLES.gwalk = {
+    frames: 8,
+    dur: 0.84,
+    pose: (p) => withWeapon(CYCLES.walk.pose(p), { a: 0.25 + Math.sin(p * TAU) * 0.12, e: 0.45 }, { wr: 0.75 }),
+  };
+
   // ------------------------------------------------------------ séquences d'attaque
   // Liste de [pose, durée] ; on interpole avec un easing (anticipation -> frappe -> retour).
   const SEQ = (M.SEQ = {
@@ -677,9 +705,12 @@
     shoot: [['astance1', 0.0], ['drawBow', 0.12], ['drawBow', 0.06], ['shoot', 0.05], ['shoot', 0.08], ['astance1', 0.12]],
     castStaff: [['astance1', 0.0], ['castStaff', 0.15], ['castStaff', 0.3], ['astance1', 0.15]],
     ahurt: [['ahurt', 0.0], ['ahurt', 0.16], ['astance1', 0.2]],
+    // pistolet : on lève l'arme, coup de feu, recul, on revient en joue
+    fire: [['gstance1', 0.0], ['aim', 0.08], ['aim', 0.04], ['recoil', 0.04], ['aim', 0.07], ['gstance1', 0.12]],
+    gcast: [['gstance1', 0.0], ['gcast', 0.15], ['gcast', 0.3], ['gstance1', 0.15]],
   });
   // instant (secondes) du coup dans chaque séquence
-  M.HIT = { jab: 0.12, cross: 0.12, uppercut: 0.15, kick: 0.13, airKick: 0.22, power: 0.22, cast: 0.15, slashA: 0.13, slashB: 0.12, thrust: 0.13, shoot: 0.23, castStaff: 0.15 };
+  M.HIT = { jab: 0.12, cross: 0.12, uppercut: 0.15, kick: 0.13, airKick: 0.22, power: 0.22, cast: 0.15, slashA: 0.13, slashB: 0.12, thrust: 0.13, shoot: 0.23, castStaff: 0.15, fire: 0.12, gcast: 0.15 };
 
   M.seqDur = (name) => SEQ[name].reduce((s, k) => s + k[1], 0);
 

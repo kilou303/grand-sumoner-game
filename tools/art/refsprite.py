@@ -12,6 +12,10 @@ Chaque script tools/art/build_<héros>.py fournit sa configuration à `build(cfg
   face, face_col         retouches à la main : {ligne: (x0, 'pixels')}, {lettre: couleur}
   cut, joints, piv       découpe en pièces, articulations et pivots (image réduite)
   erase                  pixels à effacer après réduction : {ligne: R((x0, x1), ...)}
+  keep_edge              zones où le contour sombre extérieur et les pixels isolés sont gardés
+                         (mèches de cheveux noirs) : {ligne: R(...)}
+  recolor                recoloration de zones : [{mask: {ligne: R(...)}, ramp: [couleurs sombre ->
+                         clair], min_lum, max_sat}] (cheveux noirs distincts d'une armure grise...)
 options : scale (1.5), ncol (22), outline_lum (30 : seuil du contour noir retiré),
           dark_bias (1.6 : poids des traits sombres à la réduction), hole_min / hole_size
           (225 / 3 : trous de fond enfermés à retirer), lift (gain d'éclaircissement des teintes
@@ -168,13 +172,6 @@ def isolated(g, passes=2):
                     g[y][x] = '.'
 
 
-def crop(g):
-    h, w = len(g), len(g[0])
-    ys = [y for y in range(h) if any(c != '.' for c in g[y])]
-    xs = [x for x in range(w) if any(g[y][x] != '.' for y in range(h))]
-    return [list(r[min(xs):max(xs) + 1]) for r in g[min(ys):max(ys) + 1]]
-
-
 def build_frame(cfg):
     A = np.asarray(Image.open(cfg['src']).convert('RGB')).astype(float)
     nat, m = segment(native(A, cfg['pitch'], cfg['off']), cfg['floor'], cfg.get('hole_min', 225), cfg.get('hole_size', 3))
@@ -186,11 +183,24 @@ def build_frame(cfg):
     lab = np.argmin(((nat[:, :, None, :] - C[None, None]) ** 2).sum(3), 2)
     dark = [pal_lum(pal[CHARS[i]]) < thr for i in range(len(C))]
     g = reduce(lab, m, len(C), dark, cfg.get('scale', 1.5), cfg.get('dark_bias', 1.6))
+    raw = [r[:] for r in g]
     strip_outline(g, pal, thr)
     isolated(g)
+    # cadrage d'après le personnage nettoyé (les coordonnées des réglages s'y réfèrent)
+    h, w = len(g), len(g[0])
+    y0 = min(y for y in range(h) if any(c != '.' for c in g[y]))
+    y1 = max(y for y in range(h) if any(c != '.' for c in g[y]))
+    x0 = min(x for x in range(w) if any(g[y][x] != '.' for y in range(h)))
+    x1 = max(x for x in range(w) if any(g[y][x] != '.' for y in range(h)))
+    # zones protégées du nettoyage : des cheveux noirs perdraient leurs mèches fines du bord
+    for y, rs in cfg.get('keep_edge', {}).items():
+        for a, b in rs:
+            for x in range(a, b + 1):
+                if y0 + y <= y1 and x0 + x <= x1:
+                    g[y0 + y][x0 + x] = raw[y0 + y][x0 + x]
     if cfg.get('lift'):
         pal = lift(pal, thr, cfg['lift'])
-    return [''.join(r) for r in crop(g)], pal
+    return [''.join(r[x0:x1 + 1]) for r in g[y0:y1 + 1]], pal
 
 
 def lift(pal, thr, gain):
@@ -226,8 +236,39 @@ def erase(rows, spans):
     return [''.join(r) for r in g]
 
 
+def sat(h):
+    c = [int(h[i:i + 2], 16) for i in (1, 3, 5)]
+    return (max(c) - min(c)) / max(1, max(c))
+
+
+def recolor(rows, pal, specs):
+    """Remplace, dans chaque masque, les teintes grises (saturation <= max_sat, hors contour
+    plus sombre que min_lum) par un dégradé : la plus sombre présente -> ramp[0], la plus claire
+    -> ramp[-1]. Les couleurs du dégradé sont ajoutées à la palette."""
+    pal = dict(pal)
+    g = [list(r) for r in rows]
+    for sp in specs:
+        cells = [(y, x) for y, rs in sp['mask'].items() for x0, x1 in rs for x in range(x0, x1 + 1)
+                 if y < len(g) and x < len(g[0]) and g[y][x] != '.']
+        ok = lambda k: pal_lum(pal[k]) >= sp.get('min_lum', 10) and sat(pal[k]) <= sp.get('max_sat', 0.3)
+        keys = sorted({g[y][x] for y, x in cells if ok(g[y][x])}, key=lambda k: pal_lum(pal[k]))
+        ramp = sp['ramp']
+        new = {}
+        for i, k in enumerate(keys):
+            c = ramp[round(i * (len(ramp) - 1) / max(1, len(keys) - 1))]
+            hit = [kk for kk, v in pal.items() if v == c]
+            if not hit:
+                hit = [CHARS[len(pal)]]
+                pal[hit[0]] = c
+            new[k] = hit[0]
+        for y, x in cells:
+            if g[y][x] in new:
+                g[y][x] = new[g[y][x]]
+    return [''.join(r) for r in g], pal
+
+
 def retouch(rows, pal, face, face_col):
-    """Retouches à la main. Une couleur sans équivalent proche dans la palette (yeux verts
+    """Retouches à la main ('.' garde le pixel, ' ' l'efface). Une couleur sans équivalent proche dans la palette (yeux verts
     d'un personnage qui n'en a pas ailleurs, par exemple) y est ajoutée."""
     pal = dict(pal)
     for hexc in face_col.values():
@@ -236,7 +277,9 @@ def retouch(rows, pal, face, face_col):
     g = [list(r) for r in rows]
     for y, (x0, row) in face.items():
         for i, ch in enumerate(row):
-            if ch != '.':
+            if ch == ' ':
+                g[y][x0 + i] = '.'
+            elif ch != '.':
                 g[y][x0 + i] = nearest(pal, face_col[ch])
     return [''.join(r) for r in g], pal
 
@@ -272,6 +315,7 @@ def build_parts(rows, cut, piv, names, nocrop):
 def build(cfg):
     rows, pal = build_frame(cfg)
     rows = erase(rows, cfg.get('erase', {}))
+    rows, pal = recolor(rows, pal, cfg.get('recolor', []))
     rows, pal = retouch(rows, pal, cfg.get('face', {}), cfg.get('face_col', {}))
     if os.environ.get('DUMP'):
         json.dump({'pal': pal, 'rows': rows}, open(os.environ['DUMP'], 'w'))
