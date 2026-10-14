@@ -14,6 +14,7 @@ Chaque script tools/art/build_<héros>.py fournit sa configuration à `build(cfg
   face, face_col         retouches à la main : {ligne: (x0, 'pixels')}, {lettre: couleur}
   cut, joints, piv       découpe en pièces, articulations et pivots (image réduite)
   combine, alias, rotate pièces composées, reprises ou tournées (voir build_parts)
+  base                   modèle du créateur sans héros : {id, label, hipF, hipB, backArm}
   materials              {groupe (head, top, legs): {matière: 'clés'}} pour le créateur de perso
   erase                  pixels à effacer après réduction : {ligne: R((x0, x1), ...)}
   keep_edge              zones où le contour sombre extérieur et les pixels isolés sont gardés
@@ -393,7 +394,15 @@ def build(cfg):
             if bad:
                 raise SystemExit('matières %s : clés absentes de la palette %s' % (g, bad))
         lines.append('    mat: ' + json.dumps(mat) + ',')
-    lines += ['  };', '})();']
+    lines.append('  };')
+    if cfg.get('base'):
+        # modèle du créateur de perso (sans héros jouable) : enregistré directement
+        b = dict(cfg['base'])
+        bid = b.pop('id')
+        b = dict({'name': cfg['name']}, **b)
+        lines.append('  GS.REF_BASES = GS.REF_BASES || {};')
+        lines.append('  GS.REF_BASES.%s = Object.assign(%s, { art: GS.%s });' % (bid, json.dumps(b, ensure_ascii=False), cfg['var']))
+    lines.append('})();')
     with open(cfg['out'], 'w', encoding='utf-8') as fh:
         fh.write('\n'.join(lines) + '\n')
     print('écrit', cfg['out'], '%dx%d' % (len(rows[0]), len(rows)), 'pixels non attribués :', left)

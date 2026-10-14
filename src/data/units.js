@@ -118,7 +118,7 @@
     // ============================================================ ★5
     {
       id: 'kaelen',
-      rigSpec: { head: 'spiky', hair: '#f4e6a8', jacket: '#3a5cc8', pants: '#2a2c48', shoes: '#f0f0f8', skin: '#f2c8a6', eyes: '#3aa0ff', weapon: 'sword', blade: '#f4e4b0', gem: '#ffe060', top: 'jacket', inner: '#f4f0e0', bottom: 'jeans' },
+      rigSpec: { ref: { head: 'combattant', top: 'lyceen', legs: 'lyceen' }, hair: '#f4e6a8', skin: '#f2c8a6', eyes: '#3aa0ff', jacket: '#3a5cc8', inner: '#ffe060', pants: '#2a2c48', shoes: '#f0f0f8', weapon: 'sword', blade: '#f4e4b0', gem: '#ffe060' },
       rig: () => GS.Variants.char('kaelen'),
       name: 'Kaelen',
       title: 'Lame Solaire',
@@ -194,7 +194,7 @@
     },
     {
       id: 'gaius',
-      rigSpec: { head: 'mane', hair: '#3f8a3a', jacket: '#5f8a48', pants: '#4a3828', shoes: '#806040', skin: '#b87a50', eyes: '#50e070', weapon: 'hammer', blade: '#a0f0b0', gem: '#60ff90', top: 'tank', shoeType: 'boots', belt: true },
+      rigSpec: { ref: { head: 'rodeur', top: 'combattant', legs: 'combattant' }, hair: '#3f8a3a', skin: '#b87a50', eyes: '#50e070', jacket: '#5f8a48', inner: '#a08040', pants: '#4a3828', shoes: '#806040', weapon: 'hammer', blade: '#a0f0b0', gem: '#60ff90' },
       rig: () => GS.Variants.char('gaius'),
       name: 'Gaïus',
       title: 'Titan de Jade',
@@ -215,7 +215,7 @@
     // ============================================================ ★4
     {
       id: 'rook',
-      rigSpec: { head: 'helmet', metal: '#b8c4d8', jacket: '#3a7a40', pants: '#2a3a2a', shoes: '#9aa4b4', skin: '#e8b890', eyes: '#40a040', weapon: 'sword', top: 'coat', inner: '#9aa4b4', shoeType: 'boots' },
+      rigSpec: { ref: { head: 'lyceen', top: 'rodeur', legs: 'rodeur' }, hair: '#4a4a5a', skin: '#e8b890', eyes: '#40a040', jacket: '#3a7a40', inner: '#9aa4b4', metal: '#c8d0e0', pants: '#2a3a2a', shoes: '#9aa4b4', weapon: 'sword' },
       rig: () => GS.Variants.char('rook'),
       name: 'Rook',
       title: 'Chevalier de Fer',
@@ -253,7 +253,7 @@
     },
     {
       id: 'zeph',
-      rigSpec: { head: 'hood', hood: '#3a3a5a', jacket: '#2c2c44', pants: '#16161e', shoes: '#5a5a7a', skin: '#e8c0a0', eyes: '#c040ff', weapon: 'dagger', gem: '#c060ff', top: 'hoodie', bottom: 'joggers' },
+      rigSpec: { ref: { head: 'rodeur', top: 'rodeur', legs: 'rodeur' }, hair: '#3a3a5a', skin: '#e8c0a0', eyes: '#c040ff', jacket: '#2c2c44', inner: '#16161e', pants: '#16161e', shoes: '#5a5a7a', weapon: 'dagger', gem: '#c060ff' },
       rig: () => GS.Variants.char('zeph'),
       name: 'Zeph',
       title: 'Ninja Fantôme',
@@ -272,7 +272,7 @@
     },
     {
       id: 'brann',
-      rigSpec: { head: 'mane', hair: '#d02828', jacket: '#7a3020', pants: '#3a3a50', shoes: '#5a4030', skin: '#e0a07a', eyes: '#ff8030', weapon: 'axe', top: 'jacket', inner: '#2a2020', bottom: 'jeans', shoeType: 'boots' },
+      rigSpec: { ref: { head: 'rodeur', top: 'combattant', legs: 'rodeur' }, hair: '#d02828', skin: '#e0a07a', eyes: '#ff8030', jacket: '#7a3020', inner: '#d0a040', pants: '#3a3a50', shoes: '#5a4030', weapon: 'axe' },
       rig: () => GS.Variants.char('brann'),
       name: 'Brann',
       title: 'Berserker Écarlate',
@@ -312,7 +312,7 @@
     // ============================================================ ★3
     {
       id: 'pip',
-      rigSpec: { head: 'short', hair: '#8a5030', jacket: '#d86a20', pants: '#4a3020', shoes: '#f0e0c0', skin: '#f4caa8', eyes: '#a05020', weapon: 'staff', gem: '#ff7020', top: 'tshirt', print: 'star', printColor: '#ffe070', bottom: 'shorts' },
+      rigSpec: { ref: { head: 'lyceen', top: 'rodeur', legs: 'rodeur' }, hair: '#8a5030', skin: '#f4caa8', eyes: '#a05020', jacket: '#d86a20', inner: '#4a3020', pants: '#4a3020', shoes: '#f0e0c0', weapon: 'staff', gem: '#ff7020' },
       rig: () => GS.Variants.char('pip'),
       name: 'Pip',
       title: 'Apprenti Pyromancien',
@@ -350,7 +350,7 @@
     },
     {
       id: 'toran',
-      rigSpec: { head: 'short', hair: '#5a3a22', jacket: '#6a8a40', pants: '#3a4a6a', shoes: '#a08860', skin: '#e0ac80', eyes: '#6a4a2a', weapon: 'spear', top: 'tshirt', print: 'curse', printColor: '#e8e0c8', bottom: 'jeans' },
+      rigSpec: { ref: { head: 'lyceen', top: 'rodeur', legs: 'lyceen' }, hair: '#5a3a22', skin: '#e0ac80', eyes: '#6a4a2a', jacket: '#6a8a40', inner: '#5a4030', pants: '#3a4a6a', shoes: '#a08860', weapon: 'spear' },
       rig: () => GS.Variants.char('toran'),
       name: 'Toran',
       title: 'Garde du Village',
@@ -369,7 +369,7 @@
     },
     {
       id: 'sly',
-      rigSpec: { head: 'hood', hood: '#4a6a3a', jacket: '#5a5038', pants: '#2a2418', shoes: '#806848', skin: '#d8a880', eyes: '#a0e040', weapon: 'dagger' },
+      rigSpec: { ref: { head: 'rodeur', top: 'rodeur', legs: 'rodeur' }, hair: '#4a6a3a', skin: '#d8a880', eyes: '#a0e040', jacket: '#5a5038', inner: '#3a3020', pants: '#2a2418', shoes: '#806848', weapon: 'dagger' },
       rig: () => GS.Variants.char('sly'),
       name: 'Sly',
       title: 'Voleur des Ruelles',
@@ -388,7 +388,7 @@
     },
     {
       id: 'mael',
-      rigSpec: { head: 'short', hair: '#2a3a5a', jacket: '#3a70a0', pants: '#d8c8a0', shoes: '#3a2a20', skin: '#c88a60', eyes: '#3060a0', weapon: 'spear', blade: '#e0e8f0', top: 'tank', bottom: 'shorts', shoeType: 'sandals' },
+      rigSpec: { ref: { head: 'lyceen', top: 'combattant', legs: 'combattant' }, hair: '#2a3a5a', skin: '#c88a60', eyes: '#3060a0', jacket: '#3a70a0', inner: '#d8c8a0', pants: '#d8c8a0', shoes: '#3a2a20', weapon: 'spear', blade: '#e0e8f0' },
       rig: () => GS.Variants.char('mael'),
       name: 'Maël',
       title: 'Harponneur',
@@ -407,7 +407,7 @@
     },
     {
       id: 'elwin',
-      rigSpec: { head: 'long', acc: 'elf', hair: '#c8e870', jacket: '#3a7a3a', pants: '#5a4028', shoes: '#c0a070', skin: '#f2d2b0', eyes: '#40b040', weapon: 'bow', top: 'coat', inner: '#c8e870', bottom: 'jeans', shoeType: 'boots' },
+      rigSpec: { ref: { head: 'rodeur', top: 'rodeur', legs: 'rodeur' }, hair: '#c8e870', skin: '#f2d2b0', eyes: '#40b040', jacket: '#3a7a3a', inner: '#5a4028', pants: '#5a4028', shoes: '#c0a070', weapon: 'bow' },
       rig: () => GS.Variants.char('elwin'),
       name: 'Elwin',
       title: 'Ranger Sylvestre',
@@ -427,7 +427,7 @@
     // ============================================================ NOUVEAUX (créateur de tenues)
     {
       id: 'kenji',
-      rigSpec: { head: 'spiky', hair: '#f0f0f8', acc: ['blindfold'], top: 'coat', jacket: '#16161e', inner: '#2a2a3a', bottom: 'joggers', pants: '#16161e', shoeType: 'loafers', shoes: '#1a1418', skin: '#f2d0b0', eyes: '#40b0ff' },
+      rigSpec: { ref: { head: 'combattant', top: 'lyceen', legs: 'lyceen' }, hair: '#f0f0f8', skin: '#f2d0b0', eyes: '#40b0ff', jacket: '#16161e', inner: '#2a2a3a', pants: '#16161e', shoes: '#1a1418' },
       rig: () => GS.Variants.char('kenji'),
       name: 'Kenji',
       title: "L'Œil Voilé",
@@ -465,7 +465,7 @@
     },
     {
       id: 'malik',
-      rigSpec: { head: 'buzz', hair: '#1a1410', top: 'tank', jacket: '#f0f0f0', bottom: 'shorts', pants: '#2a2a2a', shoeType: 'hightops', shoes: '#c02030', skin: '#8a5a3a', eyes: '#301810', gloves: '#c02030' },
+      rigSpec: { ref: { head: 'lyceen', top: 'combattant', legs: 'combattant' }, hair: '#1a1410', skin: '#8a5a3a', eyes: '#301810', jacket: '#f0f0f0', inner: '#c02030', pants: '#2a2a2a', shoes: '#c02030' },
       rig: () => GS.Variants.char('malik'),
       name: 'Malik',
       title: "Poings d'Acier",
@@ -503,7 +503,7 @@
     },
     {
       id: 'dante',
-      rigSpec: { head: 'long', hair: '#1a1418', acc: ['scar'], top: 'coat', jacket: '#2a1418', inner: '#c02030', bottom: 'jeans', pants: '#1a1a22', shoeType: 'boots', shoes: '#1a1418', skin: '#e0b898', eyes: '#c02030', weapon: 'katana', blade: '#c8c8d8', gem: '#c02030' },
+      rigSpec: { ref: { head: 'rodeur', top: 'lyceen', legs: 'lyceen' }, hair: '#1a1418', skin: '#e0b898', eyes: '#c02030', jacket: '#2a1418', inner: '#c02030', pants: '#1a1a22', shoes: '#1a1418', weapon: 'katana', blade: '#c8c8d8', gem: '#c02030' },
       rig: () => GS.Variants.char('dante'),
       name: 'Dante',
       title: 'Exorciste Errant',
@@ -522,7 +522,7 @@
     },
     {
       id: 'leo',
-      rigSpec: { head: 'short', hair: '#d8a040', top: 'tshirt', jacket: '#e8e4ec', print: 'star', printColor: '#e8c040', bottom: 'jeans', pants: '#3a5a8a', shoes: '#f0f0f4', skin: '#f2c8a6', eyes: '#4a80c0', weapon: 'bat' },
+      rigSpec: { ref: { head: 'lyceen', top: 'combattant', legs: 'lyceen' }, hair: '#d8a040', skin: '#f2c8a6', eyes: '#4a80c0', jacket: '#e8e4ec', inner: '#e8c040', pants: '#3a5a8a', shoes: '#f0f0f4', weapon: 'bat' },
       rig: () => GS.Variants.char('leo'),
       name: 'Léo',
       title: 'Batteur du Quartier',

@@ -1,7 +1,7 @@
 'use strict';
 // Ennemis et boss. Stats de base multipliées par le niveau de la quête.
 // art : ['c', type, opts] (fléau procédural, voir curses.js)
-//       ['r', spec, échelle] (humain au format de Djegui, voir variants.js)
+//       ['r', spec, échelle] (humain du créateur de perso, voir variants.js)
 // blood : couleur des giclées ('red', 'curse', 'ichor', 'bone'...).
 (function () {
   const e = (type, turns = 3, chance = 1, target) => ({ type, turns, chance, target });
@@ -98,7 +98,7 @@
       name: 'Voyou',
       element: 'earth',
       blood: 'red',
-      art: ['r', { head: 'cap', hair: '#c83030', jacket: '#3a3a44', pants: '#24242c', shoes: '#d0d0d8', skin: '#c8906a', eyes: '#402020', weapon: 'bat' }],
+      art: ['r', { ref: { head: 'lyceen', top: 'lyceen', legs: 'lyceen' }, hair: '#c83030', skin: '#c8906a', eyes: '#402020', jacket: '#3a3a44', inner: '#24242c', pants: '#24242c', shoes: '#d0d0d8', weapon: 'bat' }],
       hp: 950,
       atk: 220,
       def: 50,
@@ -112,7 +112,7 @@
       name: 'Cogneur',
       element: 'fire',
       blood: 'red',
-      art: ['r', { head: 'buzz', hair: '#1a1410', jacket: '#5a2a1a', pants: '#2a2420', shoes: '#3a3028', skin: '#8a5a3a', eyes: '#301810', weapon: 'pipe' }],
+      art: ['r', { ref: { head: 'lyceen', top: 'combattant', legs: 'combattant' }, hair: '#1a1410', skin: '#8a5a3a', eyes: '#301810', jacket: '#5a2a1a', inner: '#3a3028', pants: '#2a2420', shoes: '#3a3028', weapon: 'pipe' }],
       hp: 1250,
       atk: 240,
       def: 70,
@@ -126,7 +126,7 @@
       name: 'Surineur',
       element: 'water',
       blood: 'red',
-      art: ['r', { head: 'hood', hood: '#2a3040', jacket: '#20242e', pants: '#16181e', shoes: '#4a4a58', skin: '#d8a888', eyes: '#80d0ff', weapon: 'dagger', blade: '#c8d0dc' }],
+      art: ['r', { ref: { head: 'rodeur', top: 'rodeur', legs: 'rodeur' }, hair: '#2a3040', skin: '#d8a888', eyes: '#80d0ff', jacket: '#20242e', inner: '#16181e', pants: '#16181e', shoes: '#4a4a58', weapon: 'dagger', blade: '#c8d0dc' }],
       hp: 850,
       atk: 250,
       def: 40,
@@ -140,7 +140,7 @@
       name: 'Sectaire Masqué',
       element: 'dark',
       blood: 'red',
-      art: ['r', { head: 'mask', hair: '#2a1424', jacket: '#1e1018', pants: '#140a10', shoes: '#2a1a22', skin: '#c8a090', eyes: '#ff2040', weapon: 'staff', gem: '#ff2040' }],
+      art: ['r', { ref: { head: 'rodeur', top: 'rodeur', legs: 'rodeur' }, hair: '#2a1424', skin: '#c8a090', eyes: '#ff2040', jacket: '#1e1018', inner: '#2a1a22', pants: '#140a10', shoes: '#2a1a22', weapon: 'staff', gem: '#ff2040' }],
       hp: 900,
       atk: 270,
       def: 45,
@@ -154,7 +154,7 @@
       name: 'Exorciste Renégat',
       element: 'light',
       blood: 'red',
-      art: ['r', { head: 'short', hair: '#e8e8f0', jacket: '#14141c', pants: '#0e0e14', shoes: '#e8e8f0', skin: '#e8c0a0', eyes: '#ffe060', weapon: 'katana', blade: '#e0e8ff' }],
+      art: ['r', { ref: { head: 'combattant', top: 'lyceen', legs: 'lyceen' }, hair: '#e8e8f0', skin: '#e8c0a0', eyes: '#ffe060', jacket: '#14141c', inner: '#e8e8f0', pants: '#0e0e14', shoes: '#e8e8f0', weapon: 'katana', blade: '#e0e8ff' }],
       hp: 1400,
       atk: 290,
       def: 80,
@@ -219,7 +219,7 @@
       element: 'dark',
       boss: true,
       blood: 'red',
-      art: ['r', { head: 'mane', hair: '#3a0a18', jacket: '#140a10', pants: '#0c060a', shoes: '#3a1018', skin: '#8a6a78', eyes: '#ff2040', weapon: 'greatsword', blade: '#c02030', gem: '#ff2040' }, 2],
+      art: ['r', { ref: { head: 'rodeur', top: 'combattant', legs: 'combattant' }, hair: '#3a0a18', skin: '#8a6a78', eyes: '#ff2040', jacket: '#140a10', inner: '#3a1018', pants: '#0c060a', shoes: '#3a1018', weapon: 'greatsword', blade: '#c02030', gem: '#ff2040' }, 2],
       aura: true,
       hp: 8000,
       atk: 290,

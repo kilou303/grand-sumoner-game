@@ -412,12 +412,16 @@
   };
   // Recolore une famille de teintes (même matière) : la couleur choisie prend la place de la
   // teinte moyenne, les ombres et reflets gardent leur écart de luminosité.
+  // Une matière grise ou blanche (saturation quasi nulle) prend directement la saturation voulue,
+  // et un écart de luminosité très large (blanc ombré de gris foncé) est resserré.
   const recolorFamily = (cols, target) => {
     const [th, ts, tl] = toHsl(target);
     const hs = cols.map(toHsl);
     const mean = hs.reduce((a, c) => a + c[2], 0) / hs.length;
-    const smean = hs.reduce((a, c) => a + c[1], 0) / hs.length || 1;
-    return hs.map(([, sat, l]) => fromHsl(th, U.clamp(ts * (sat / smean), 0, 1), U.clamp(tl + (l - mean), 0.02, 0.98)));
+    const smean = hs.reduce((a, c) => a + c[1], 0) / hs.length;
+    const ls = hs.map((c) => c[2]);
+    const k = Math.min(1, 0.4 / Math.max(0.01, Math.max(...ls) - Math.min(...ls)));
+    return hs.map(([, sat, l]) => fromHsl(th, smean < 0.15 ? ts : U.clamp(ts * (sat / smean), 0, 1), U.clamp(tl + (l - mean) * k, 0.02, 0.98)));
   };
   V.REF_COLOR = REF_COLOR;
   V.buildRef = (spec) => {
