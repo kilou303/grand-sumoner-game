@@ -33,7 +33,7 @@
       d = S.fresh();
       GS.data = d;
       // Héros de départ.
-      for (const id of ['djegui', 'azura', 'toran', 'lina', 'pip']) S.addUnit(id);
+      for (const id of ['djegui', 'azura', 'vesper', 'sakura', 'toran', 'lina', 'pip']) S.addUnit(id);
       d.team = d.units.slice(0, 3).map((u) => u.uid);
       S.save();
     }

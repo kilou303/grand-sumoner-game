@@ -50,6 +50,48 @@
       overlimit: { name: 'Raz-de-Marée Azur', target: 'enemies', anim: 'magic', fx: 'tsunami', power: 5.3, hits: 5, effects: [e('defDown', 3)], desc: 'Une vague géante déferle sur tous les ennemis + DÉF↓.' },
     },
 
+    {
+      id: 'vesper',
+      name: 'Vesper',
+      title: 'Cuirasse de Néon',
+      rarity: 5,
+      element: 'dark',
+      role: 'tank',
+      starter: true,
+      noGacha: true,
+      lore: "Ancienne soldate d'élite enfermée dans une armure expérimentale. Ses circuits turquoise s'allument quand elle encaisse les coups.",
+      rig: () => GS.Vesper.rig(),
+      look: { hair: 'long', body: 'armor', weapon: 'none', colors: { hair: '#2a2c36', main: '#8c3047', second: '#494e55', skin: '#e9be97', eye: '#549f9d' } },
+      attack: { hits: 2, anim: 'brawl', fx: 'punch' },
+      skills: [
+        { name: 'Impact Néon', mp: 30, target: 'enemy', anim: 'brawl', fx: 'dark', power: 2.0, hits: 3, effects: [e('stun', 1, 0.3)], desc: "Coups chargés d'énergie turquoise, 30% d'étourdissement." },
+        { name: 'Blindage Actif', mp: 35, target: 'allies', anim: 'support', fx: 'shield', effects: [e('defUp', 3), e('taunt', 2, 1, 'self')], desc: "Son armure se déploie : DÉF↑ pour l'équipe et attire les attaques." },
+      ],
+      special: { name: 'Surcharge', target: 'enemy', anim: 'brawl', fx: 'dark', power: 3.6, hits: 5, effects: [e('defDown', 3)], desc: "Cinq coups de gantelet surchargés + DÉF↓." },
+      overlimit: { name: 'Protocole Nuit Rouge', target: 'enemies', anim: 'power', fx: 'void', power: 5.0, hits: 5, effects: [e('defUp', 3, 1, 'allies')], desc: "L'armure libère toute son énergie sur les ennemis + DÉF↑ équipe." },
+    },
+
+    {
+      id: 'sakura',
+      name: 'Sakura',
+      title: 'Poing de Cerisier',
+      rarity: 5,
+      element: 'earth',
+      role: 'attaquant',
+      starter: true,
+      noGacha: true,
+      lore: "Lycéenne au caractère explosif, la terreur des voyous du quartier. Elle se bat en uniforme, les poings serrés.",
+      rig: () => GS.Sakura.rig(),
+      look: { hair: 'short', body: 'tunic', weapon: 'none', colors: { hair: '#f480b3', main: '#e9f0f6', second: '#374568', skin: '#e4ba92', eye: '#5c9a7c' } },
+      attack: { hits: 3, anim: 'brawl', fx: 'punch' },
+      skills: [
+        { name: 'Rafale de Pétales', mp: 30, target: 'enemy', anim: 'brawl', fx: 'earth', power: 2.1, hits: 5, desc: 'Une volée de coups rapides comme des pétales au vent.' },
+        { name: 'Esprit Combatif', mp: 30, target: 'self', anim: 'support', fx: 'rage', effects: [e('atkUp', 3), e('critUp', 3)], desc: 'ATQ↑ et CRITIQUE↑ pour soi (3 tours).' },
+      ],
+      special: { name: 'Uppercut du Printemps', target: 'enemy', anim: 'brawl', fx: 'earth', power: 3.8, hits: 4, crit: 0.15, effects: [e('stun', 1, 0.4)], desc: 'Enchaînement conclu par un uppercut, 40% d’étourdissement.' },
+      overlimit: { name: 'Tempête de Cerisiers', target: 'enemies', anim: 'magic', fx: 'quake', power: 5.2, hits: 5, effects: [e('atkUp', 3, 1, 'allies')], desc: "Un tourbillon de pétales et de coups frappe tous les ennemis + ATQ↑ équipe." },
+    },
+
     // ============================================================ ★5
     {
       id: 'kaelen',

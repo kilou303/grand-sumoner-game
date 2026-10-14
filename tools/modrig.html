@@ -9,6 +9,10 @@
 <script src="../src/gfx/djegui.js"></script>
 <script src="../src/gfx/azura_art.js"></script>
 <script src="../src/gfx/azura.js"></script>
+<script src="../src/gfx/vesper_art.js"></script>
+<script src="../src/gfx/vesper.js"></script>
+<script src="../src/gfx/sakura_art.js"></script>
+<script src="../src/gfx/sakura.js"></script>
 <script>
   const q = new URLSearchParams(location.search);
   const S = +(q.get('s') || 3);
@@ -16,7 +20,8 @@
   c.width = +(q.get('w') || 1600); c.height = +(q.get('h') || 900);
   const ctx = c.getContext('2d'); ctx.imageSmoothingEnabled = false;
   ctx.fillStyle = '#1c1830'; ctx.fillRect(0, 0, c.width, c.height);
-  const ch = q.get('c') === 'azura' ? GS.Azura.rig() : GS.Djegui.rig();
+  const RIGS = { azura: GS.Azura, vesper: GS.Vesper, sakura: GS.Sakura };
+  const ch = (RIGS[q.get('c')] || GS.Djegui).rig();
   let y = 6;
   const row = (label, frames) => {
     let x = 70;
