@@ -373,7 +373,10 @@
       const sy = 1 + (pose.squash || 0);
       const stumps = [];
       const pts = {};
+      // avancée de chaque articulation vers la caméra : par rapport à sa place au repos
+      // (depth) et absolue (zs, pour une vue de dessus)
       const depth = {};
+      const zs = {};
       const yaw = pose.yaw || 0;
       const cyw = Math.cos(yaw);
       const syw = Math.sin(yaw);
@@ -430,6 +433,7 @@
         const group = ++gid;
         const h = root(hip.x + (front ? sp.hipF : sp.hipB), hip.y, front ? Z_LEG : -Z_LEG);
         pts['hip' + side] = { x: h.x, y: h.y };
+        zs['hip' + side] = h.z;
         if (lost['leg' + side]) {
           stumps.push([h.x, h.y + 1, 5, 3]);
           return;
@@ -462,6 +466,7 @@
         const knee = at(h, vT);
         pts['knee' + side] = { x: knee.x, y: knee.y };
         depth['knee' + side] = knee.z - knee.z0;
+        zs['knee' + side] = knee.z;
         const kT = layer + KZ * (h.z + vT.dz / 2 - h.z0);
         add(layer, h.z + vT.dz / 2 - h.z0, limbDraw(thighN, h, vT, map), { sub: 1, group, outline: outline(kT) });
         if (lost['knee' + side]) {
@@ -478,6 +483,7 @@
         add(layer, ank.z - ank.z0, () => stampRot(g, shoe.t, shoe.pivot[0] + 0.5, shoe.pivot[1] + 0.5, ank.x, ank.y - 1, fr, map, { s: persp(ank.z - ank.z0) }), { sub: 3, group, outline: outline(layer + KZ * (ank.z - ank.z0)) });
         pts['ank' + side] = { x: ank.x, y: ank.y - 1 };
         depth['ank' + side] = ank.z - ank.z0;
+        zs['ank' + side] = ank.z;
       };
 
       // ---------------------------------------------------------- torse
@@ -539,6 +545,7 @@
       const shB = root(sB2.x, sB2.y, zB);
       const neck2 = map(...local(J.neck));
       const neck = root(neck2.x, neck2.y, Z_HEAD);
+      zs.neck = neck.z;
       const w2 = map(tp.pivot[0], tp.pivot[1] - WAIST);
       pts.waist = { x: root(w2.x, w2.y, 0).x, y: w2.y };
 
@@ -551,6 +558,7 @@
         const sh = front ? shF : shB;
         const group = ++gid;
         pts['sh' + side] = { x: sh.x, y: sh.y };
+        zs['sh' + side] = sh.z;
         if (lost['arm' + side]) {
           stumps.push([sh.x, sh.y, 4, 4]);
           return;
@@ -592,6 +600,7 @@
         const elb = at(sh, vU);
         pts['elb' + side] = { x: elb.x, y: elb.y };
         depth['elb' + side] = elb.z - elb.z0;
+        zs['elb' + side] = elb.z;
         const kU = layer + KZ * (sh.z + vU.dz / 2 - sh.z0);
         add(layer, sh.z + vU.dz / 2 - sh.z0, limbDraw(upN, sh, vU, mp), { sub: 1, group, outline: outline(kU), seam });
         const fa = arm.a + (arm.e || 0);
@@ -607,6 +616,7 @@
         const hnd = at(elb, vH);
         pts['wr' + side] = { x: hnd.x, y: hnd.y };
         depth['wr' + side] = hnd.z - hnd.z0;
+        zs['wr' + side] = hnd.z;
         if (lost['fist' + side]) {
           stumps.push([elb.x + vL.dx, elb.y + vL.dy, 3, 3]);
           return;
@@ -728,6 +738,7 @@
         neck: P1(neck),
         hip: P1(hip),
         depth,
+        zs,
       };
       for (const k of Object.keys(pts)) if (!out[k]) out[k] = P1(pts[k]);
       return out;
@@ -898,7 +909,8 @@
       wabs: p.wabs === undefined ? undefined : q1(p.wabs),
       wpn: p.wpn,
       twist: q1(p.twist),
-      yaw: q1(p.yaw),
+      // ramenée entre -π et π : un tour complet retombe exactement sur la pose de face
+      yaw: q1((p.yaw || 0) - 2 * Math.PI * Math.round((p.yaw || 0) / (2 * Math.PI))),
       headYaw: q1(p.headYaw),
       x: Math.round(p.x || 0),
       y: Math.round(p.y || 0),
@@ -946,6 +958,12 @@
   };
 
   const lerp = U.lerp;
+  // rotation du corps : par le plus court chemin (une vrille enchaîne des poses à moins d'un
+  // demi-tour d'écart, et revient à 0 sans se dérouler)
+  const lerpAng = (a, b, t) => {
+    const d = b - a - 2 * Math.PI * Math.round((b - a) / (2 * Math.PI));
+    return a + d * t;
+  };
   M.blend = (p, q, t) => ({
     swap: t < 0.5 ? p.swap : q.swap,
     mirror: t < 0.5 ? p.mirror : q.mirror,
@@ -954,7 +972,7 @@
     wr: p.wr === undefined && q.wr === undefined ? undefined : lerp(p.wr === undefined ? 1.6 : p.wr, q.wr === undefined ? 1.6 : q.wr, t),
     wabs: p.wabs !== undefined && q.wabs !== undefined ? lerp(p.wabs, q.wabs, t) : t < 0.5 ? p.wabs : q.wabs,
     twist: lerp(p.twist || 0, q.twist || 0, t),
-    yaw: lerp(p.yaw || 0, q.yaw || 0, t),
+    yaw: lerpAng(p.yaw || 0, q.yaw || 0, t),
     headYaw: lerp(p.headYaw || 0, q.headYaw || 0, t),
     x: lerp(p.x || 0, q.x || 0, t),
     y: lerp(p.y || 0, q.y || 0, t),
