@@ -28,7 +28,8 @@ CUT = [
     ('U', {y: R((22, 27)) for y in range(18, 24)}),
     ('L', {19: R((31, 33)), 20: R((30, 33)), 21: R((28, 33)),
            22: R((28, 31)), 23: R((27, 30)), 24: R((24, 30)), 25: R((24, 30)), 26: R((24, 30))}),
-    ('F', {y: R((30, 34)) for y in range(14, 19)}),
+    # (34, 19) : bas du poing levé (sinon il reste seul dans le torse, à côté de l'épaule)
+    ('F', {**{y: R((30, 34)) for y in range(14, 19)}, 19: R((34, 34))}),
     ('t', {y: R((0, 35)) for y in range(14, 38)}),
     ('a', {y: R((4, 16)) for y in range(38, 46)}),
     ('A', {y: R((17, 30)) for y in range(38, 45)}),

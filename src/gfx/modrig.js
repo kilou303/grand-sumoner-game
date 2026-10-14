@@ -195,6 +195,7 @@
     const c = Math.cos(ang);
     const s = Math.sin(ang);
     const k = o && o.k !== undefined ? Math.max(0.05, o.k) : 1;
+    const sel = (o && o.sel) || null;
     const sc = o && o.s !== undefined ? o.s : 1;
     const ux = o && o.u ? o.u[0] : 0;
     const uy = o && o.u ? o.u[1] : 1;
@@ -223,6 +224,16 @@
         let ch = up ? up[Math.floor(fy * UP)][Math.floor(fx * UP)] : tpl[Math.floor(fy)][Math.floor(fx)];
         if (ch === '.') continue;
         if (map && map[ch]) ch = map[ch];
+        if (sel && ch === sel.ch && g[y][x] !== '.') {
+          // contour du gabarit (bord de la pièce) posé sur une autre pièce : l'ombre de ce
+          // qu'il recouvre plutôt qu'un trait noir
+          const ix = Math.floor(fx);
+          const iy = Math.floor(fy);
+          const r = tpl[iy];
+          const edge = (r[ix - 1] || '.') === '.' || (r[ix + 1] || '.') === '.' || ((tpl[iy - 1] || '')[ix] || '.') === '.' || ((tpl[iy + 1] || '')[ix] || '.') === '.';
+          const sh = edge && sel.shade[g[y][x]];
+          if (sh && sh !== g[y][x]) ch = sh;
+        }
         g[y][x] = ch;
         out.push(y * g.w + x);
       }
@@ -274,7 +285,10 @@
 
   // Liseré sombre autour d'une pièce, là où elle recouvre d'autres pièces.
   // owner/gid (facultatifs) : on ne cerne pas les pixels du même membre (autres pièces du bras).
-  const innerOutline = (g, cells, ch, owner, gid) => {
+  // soft (facultatif, teinte assombrie de chaque couleur) : liseré doux, l'ombre que la pièce
+  // jette sur ce qu'elle recouvre (une manche blanche sur une chemise blanche n'y fait plus de
+  // rayures noires)
+  const innerOutline = (g, cells, ch, owner, gid, soft) => {
     const set = new Set(cells);
     for (const id of cells) {
       const x = id % g.w;
@@ -286,7 +300,8 @@
         const nid = ny * g.w + nx;
         if (set.has(nid) || g[ny][nx] === '.') continue;
         if (owner && owner[nid] === gid) continue;
-        g[ny][nx] = ch;
+        const under = g[ny][nx];
+        g[ny][nx] = soft && soft[under] && soft[under] !== under ? soft[under] : ch;
       }
     }
   };
@@ -336,6 +351,10 @@
       this.P = spec.art.parts;
       this.cache = new Map();
       this.L = { thigh: len(this.P.thighF), shin: len(this.P.shinF) };
+      // Vu de trois quarts, le bras avant (à droite de l'image) est le plus loin de la caméra et
+      // le bras arrière le plus proche : quand le bras avant passe derrière le torse, le bras
+      // arrière passe devant (sauf spec.backArm = 'behind').
+      this.backFront = spec.backArm ? spec.backArm === 'front' : spec.frontArm === 'under';
       // membres arrachés (gore) : 'armF', 'armB', 'head'
       this.lost = {};
       this.lostKey = '';
@@ -436,6 +455,29 @@
           })
           .join('');
       });
+      // le dos est plein : les trous laissés par les bras découpés dans la planche sont bouchés
+      // (sinon, de dos, on voit la main arrière à travers le torse)
+      this._torsoBack = this._torsoBack.map((row) => {
+        const a = [...row];
+        const xs = a.map((ch, x) => (ch !== '.' ? x : -1)).filter((x) => x >= 0);
+        if (xs.length < 2) return row;
+        for (let x = xs[0] + 1; x < xs[xs.length - 1]; x++) {
+          if (a[x] !== '.') continue;
+          for (let d = 1; d < a.length; d++) {
+            const l = a[x - d];
+            const r = a[x + d];
+            if (l && l !== '.' && l !== ol) {
+              a[x] = l;
+              break;
+            }
+            if (r && r !== '.' && r !== ol) {
+              a[x] = r;
+              break;
+            }
+          }
+        }
+        return a.join('');
+      });
       return this._torsoBack;
     }
 
@@ -529,11 +571,11 @@
       const add = (layer, dz, draw, o = {}) => items.push(Object.assign({ key: layer + KZ * dz + (o.sub || 0) * 0.01, n: items.length, draw }, o));
       let gid = 0;
       // membre (pièce) entre deux points : pivot du gabarit sur `from`, axe vers `v`
-      const limbDraw = (part, from, v, map) => () => {
+      const limbDraw = (part, from, v, map, sel) => () => {
         const p = P[part];
         const r = len(p) ? v.slen / len(p) : 1;
         const k = Math.abs(r - 1) < 1e-6 ? 1 : U.clamp(r, 0.3, 1);
-        return stampRot(g, p.t, p.pivot[0] + 0.5, p.pivot[1] + 0.5, from.x, from.y, ang0(p) - v.ang, map, { k, u: axis(p), s: persp(from.z + v.dz / 2 - from.z0) });
+        return stampRot(g, p.t, p.pivot[0] + 0.5, p.pivot[1] + 0.5, from.x, from.y, ang0(p) - v.ang, map, { k, u: axis(p), s: persp(from.z + v.dz / 2 - from.z0), sel });
       };
 
       // ---------------------------------------------------------- jambes
@@ -599,8 +641,14 @@
       // Les bras "mains dans les poches" de la fiche sont collés au torse (même cisaillement).
       const tp = P.torso;
       const intact = (side) => !lost['arm' + side] && !lost['lo' + side] && !lost['fist' + side];
-      const pocketB = (pose.arms[0].hand || 'fist') === 'pocket' && P.pocketB && intact('B');
-      const pocketF = (pose.arms[1].hand || 'fist') === 'pocket' && P.pocketF && intact('F');
+      // spec.rearGuard : le bras arrière de la planche (garde large, poing vers l'arrière) est
+      // remplacé par une garde de boxe, poing devant la poitrine
+      const pocketB = (pose.arms[0].hand || 'fist') === 'pocket' && P.pocketB && intact('B') && !sp.rearGuard;
+      // bras arrière ballant (pas de poche dans la planche) : la torsion ne le ramène pas au
+      // milieu du buste
+      const hangB = (pose.arms[0].hand || 'fist') === 'pocket' && !pocketB && !sp.rearGuard;
+      // un perso armé ne met jamais la main qui tient l'arme dans la poche
+      const pocketF = (pose.arms[1].hand || 'fist') === 'pocket' && P.pocketF && intact('F') && !sp.weapon;
       // corps tourné : torse enroulé sur son volume (dos au-delà d'un quart de tour), ou sa
       // vraie vue de profil / de dos ; une vue qui montre les bras dans les poches ne sert que
       // si les deux mains y sont (et remplace alors les poches)
@@ -622,8 +670,8 @@
       };
       // bras avant derrière le torse (tous sauf Djegui) : sa poche passe sous le torse
       const under = sp.frontArm === 'under';
-      // bras arrière devant le torse (perso vu de l'autre trois-quarts, comme Valka)
-      const backOver = sp.backArm === 'front';
+      // bras arrière devant le torse : le plus proche de la caméra en vue de trois quarts
+      const backOver = this.backFront;
       // calque du torse : poche arrière (derrière le buste), torse, poches devant ; ses
       // cellules servent au liseré des bras qui passent dessous
       let torsoMask = null;
@@ -655,7 +703,7 @@
       const sB2 = map(...local(J.shoulderB));
       // rotation du buste : l'épaule arrière avance (coup du bras arrière, garde)
       const tw = pose.twist || 0;
-      sB2.x += tw * 13;
+      sB2.x += tw * 13 * (hangB ? 0.3 : 1);
       sB2.y += tw * 1;
       sF2.x -= tw * 3;
       const zF = under ? -Z_NEAR_ARM : Z_NEAR_ARM;
@@ -672,10 +720,12 @@
       // Bras en 3 pièces : biceps, avant-bras, poing (+ arme dans le poing avant).
       let handF = null;
       let muzzle = null;
+      let backGroup = 0;
       const drawArm = (arm, front, layer) => {
         const side = front ? 'F' : 'B';
         const sh = front ? shF : shB;
         const group = ++gid;
+        if (!front) backGroup = group;
         pts['sh' + side] = { x: sh.x, y: sh.y };
         zs['sh' + side] = sh.z;
         if (lost['arm' + side]) {
@@ -685,16 +735,20 @@
         let hand = arm.hand || 'fist';
         if (hand === 'pocket') {
           if (front ? pocketF : pocketB) return;
-          // bras mutilé : il pend le long du corps
-          arm = { a: front ? -0.12 : 0.12, e: front ? 0.2 : -0.2, hand: 'fist' };
+          // garde arrière, sinon (pas de poche, bras mutilé) il pend le long du corps
+          arm = !front && sp.rearGuard ? Object.assign({}, sp.rearGuard, { hand: 'fist' }) : { a: front ? -0.12 : 0.12, e: front ? 0.2 : -0.2, hand: 'fist' };
           hand = 'fist';
         }
         const mp = null;
         const upN = front ? 'armUpF' : 'armUpB';
         const loN = front ? 'armLoF' : 'armLoB';
         const seam = front && under;
-        const lit = front || pose.swap || pose.backArm === 'front' || sp.backArm === 'front';
+        const lit = front || pose.swap || pose.backArm === 'front' || this.backFront;
         const outline = (k) => lit || k > 60;
+        // bras arrière passé devant le torse : liseré doux (ombre sur le torse), y compris sur
+        // le contour de son propre dessin
+        const soft = !front && this.backFront;
+        const sel = soft ? { ch: sp.outline, shade: this.shade } : null;
         // traînée d'un coup rapide : deux images fantômes de l'avant-bras et du poing le long
         // de la course, sous le bras
         const tr = pose.trail && pose.trail.arms[front ? 1 : 0];
@@ -720,7 +774,7 @@
         pts['elb' + side] = { x: elb.x, y: elb.y };
         depth['elb' + side] = elb.z - elb.z0;
         zs['elb' + side] = elb.z;
-        add(layer, sh.z + vU.dz / 2 - sh.z0, limbDraw(upN, sh, vU, mp), { sub: 1, group, olf: outline, seam });
+        add(layer, sh.z + vU.dz / 2 - sh.z0, limbDraw(upN, sh, vU, mp, sel), { sub: 1, group, olf: outline, seam, soft });
         const fa = arm.a + (arm.e || 0);
         if (lost['lo' + side]) {
           stumps.push([elb.x, elb.y, 3, 3]);
@@ -728,7 +782,7 @@
         }
         const d2 = d1 + (arm.de || 0);
         const vL = seg(len(P[loN]), fa, d2);
-        add(layer, elb.z + vL.dz / 2 - elb.z0, limbDraw(loN, elb, vL, mp), { sub: 2, group, olf: outline, seam });
+        add(layer, elb.z + vL.dz / 2 - elb.z0, limbDraw(loN, elb, vL, mp, sel), { sub: 2, group, olf: outline, seam, soft });
         const vH = seg(len(P[loN]) + 0.5, fa, d2);
         const hnd = at(elb, vH);
         pts['wr' + side] = { x: hnd.x, y: hnd.y };
@@ -759,7 +813,7 @@
           }
           const wang = Math.PI - vW.ang;
           const kw = U.clamp(vW.slen, 0.3, 1);
-          add(layer, dzH, () => stampRot(g, W.t, W.grip[0] + 0.5, W.grip[1] + 0.5, grip.x, grip.y, wang, null, { k: kw, u: [0, 1], s: sH }), { sub: 3, group, olf: outline, seam });
+          add(layer, dzH, () => stampRot(g, W.t, W.grip[0] + 0.5, W.grip[1] + 0.5, grip.x, grip.y, wang, null, { k: kw, u: [0, 1], s: sH }), { sub: 3, group, olf: outline, seam, soft });
           // bout de l'arme (bouche du canon, pointe) : milieu de la première ligne du gabarit
           const tx = ((W.t[0].length - 1) / 2 - W.grip[0]) * sH;
           const ty = -W.grip[1] * kw * sH;
@@ -767,16 +821,17 @@
         }
         if (hand !== 'pocket') {
           const f = P.fist;
-          add(layer, dzH, () => stampRot(g, f.t, f.pivot[0] + 0.5, f.pivot[1] + 0.5, hnd.x, hnd.y, -vL.ang, mp, { s: sH }), { sub: 4, group, olf: outline, seam });
+          add(layer, dzH, () => stampRot(g, f.t, f.pivot[0] + 0.5, f.pivot[1] + 0.5, hnd.x, hnd.y, -vL.ang, mp, { s: sH, sel }), { sub: 4, group, olf: outline, seam, soft });
         }
         if (front) handF = { x: hnd.x, y: hnd.y, ang: vL.ang };
       };
 
       // rangs du dessin à plat : bras arrière derrière (10), jambes (20, 30), bras avant sous
-      // le torse (40), cheveux (50), torse (55-65), tête (70), bras arrière devant (80), bras
-      // avant (90), bras arrière lancé devant tout (100)
-      const backBehind = !pose.swap && pose.backArm !== 'front' && sp.backArm !== 'front';
-      drawArm(pose.arms[0], false, backBehind ? 10 : pose.swap ? 100 : 80);
+      // le torse (40), cheveux (50), torse (55-60), bras arrière devant le torse (65), tête (70),
+      // bras arrière levé devant la tête (pose.backArm, 80), bras avant (90), bras arrière lancé
+      // devant tout (100)
+      const backBehind = !pose.swap && pose.backArm !== 'front' && !this.backFront;
+      drawArm(pose.arms[0], false, backBehind ? 10 : pose.swap ? 100 : pose.backArm === 'front' ? 80 : 65);
       drawLeg(pose.legs[0], false);
       drawLeg(pose.legs[1], true);
       drawArm(pose.arms[1], true, under ? 40 : 90);
@@ -802,7 +857,7 @@
       const hp = P.head;
       if (!lost.head) {
         const { t, ax, ay } = headPiece('head', hp, this.headHair() || hp.t);
-        add(70, neck.z - neck.z0, () => stampRot(g, t, ax, ay, hx0, hy0, headRot));
+        add(70, neck.z - neck.z0, () => stampRot(g, t, ax, ay, hx0, hy0, headRot), { head: true });
       } else stumps.push([neck.x, neck.y - 1, 6, 3]);
 
       // ---------------------------------------------------------- dessin, du fond vers l'avant
@@ -811,6 +866,11 @@
       // que l'avant-bras reste devant) ; ses pièces sont triées entre elles par profondeur
       const gkey = {};
       for (const it of items) if (it.group) gkey[it.group] = Math.max(gkey[it.group] === undefined ? -Infinity : gkey[it.group], it.key);
+      // bras arrière passé devant le torse : toujours sous la tête (le poing de garde ne couvre
+      // pas le visage, même le perso tourné), sauf coup lancé (swap) ou pose qui le demande ;
+      // s'il était devant le torse, il y reste
+      const headIt = items.find((it) => it.head);
+      if (this.backFront && headIt && gkey[backGroup] !== undefined && !pose.swap && pose.backArm !== 'front') gkey[backGroup] = gkey[backGroup] > 60 ? Math.max(60.5, Math.min(gkey[backGroup], headIt.key - 0.5)) : gkey[backGroup];
       for (const it of items) {
         it.rank = it.group ? gkey[it.group] : it.key;
         if (it.olf) it.outline = it.olf(it.rank);
@@ -831,7 +891,7 @@
             if ((x > 0 && torsoMask[id - 1]) || (x < CW - 1 && torsoMask[id + 1]) || (y > 0 && torsoMask[id - CW]) || (y < CH - 1 && torsoMask[id + CW])) g[y][x] = sp.outline;
           }
         }
-        if (it.outline) innerOutline(g, cells, sp.outline, owner, it.group);
+        if (it.outline) innerOutline(g, cells, sp.outline, owner, it.group, it.soft ? this.shade : null);
       }
 
       // miroir (pose.mirror) : le perso se retourne autour de l'axe des hanches (vrille d'un
@@ -993,7 +1053,16 @@
     // anim : nom d'un cycle, d'une séquence ou d'une pose-clé ; t en secondes.
     poseOf(anim, t = 0) {
       const map = this.spec.animMap;
-      return M.pose((map && map[anim]) || anim, t);
+      const name = (map && map[anim]) || anim;
+      return M.pose(name, t, SUB_SEQ.has(name) ? this.poseSub() : null);
+    }
+
+    // Perso armé : dans les réactions et le pouvoir, la garde mains dans les poches est
+    // remplacée par sa garde armée (l'arme ne disparaît plus en route).
+    poseSub() {
+      if (this._poseSub !== undefined) return this._poseSub;
+      const st = this.spec.weapon && this.spec.animMap && this.spec.animMap.stance;
+      return (this._poseSub = st === 'astance' ? ARM_SUB : st === 'gstance' ? GUN_SUB : null);
     }
 
     // Toutes les poses distinctes d'animations (pré-calcul progressif, évite les saccades).
@@ -1016,9 +1085,10 @@
     posed(anim, t = 0) {
       const map = this.spec.animMap;
       const name = (map && map[anim]) || anim;
-      const p = M.pose(name, t);
+      const sub = SUB_SEQ.has(name) ? this.poseSub() : null;
+      const p = M.pose(name, t, sub);
       if (!CYCLES[name] && !SEQ[name]) return p;
-      return M.dynamics(p, M.pose(name, t - 2 / FPS));
+      return M.dynamics(p, M.pose(name, t - 2 / FPS, sub), M.HIT[name] === undefined || M.frameT(t) <= M.HIT[name] + 1.5 / FPS);
     }
 
     anim(anim, t = 0) {
@@ -1071,7 +1141,9 @@
   // deux images plus tôt (q) : les cheveux et le bas du vêtement traînent derrière l'élan, et
   // un membre qui balaie vite laisse une traînée.
   const SMEAR = 0.45;
-  M.dynamics = (p, q) => {
+  // strike (par défaut vrai) : faux après l'impact d'un coup — le membre qui revient en garde
+  // ne laisse pas de traînée (sinon on voit deux poings ou deux pieds)
+  M.dynamics = (p, q, strike = true) => {
     const vx = (p.x || 0) - (q.x || 0);
     const vy = (p.y || 0) - (q.y || 0);
     const dl = (p.lean || 0) - (q.lean || 0);
@@ -1091,7 +1163,7 @@
       const b = q.legs[i];
       return plane && flat(l) && flat(b) && Math.min(l.a, b.a) > 0.6 && Math.abs(l.a - b.a) > SMEAR ? { a: b.a, k: b.k } : null;
     });
-    if (arms.some(Boolean) || legs.some(Boolean)) out.trail = { arms, legs };
+    if (strike && (arms.some(Boolean) || legs.some(Boolean))) out.trail = { arms, legs };
     return out;
   };
 
@@ -1201,6 +1273,11 @@
     recoil: { lean: -0.08, x: -3, twist: 0.1, legs: [{ a: -0.52, k: 0.34 }, { a: 0.4, k: 0.42 }], arms: [{ a: 0.7, e: 1.8, hand: 'fist' }, { a: 1.95, e: -0.15 }], wr: 0 },
     gcast: { lean: -0.04, legs: [{ a: -0.3, k: 0.15 }, { a: 0.3, k: 0.2 }], arms: [PK, { a: 2.9, e: 0.1 }], wr: 0 },
   });
+
+  // gardes armées qui remplacent la garde mains dans les poches dans les séquences
+  const ARM_SUB = { guard: 'astance1', guard2: 'astance2', crouch: 'aland' };
+  const GUN_SUB = { guard: 'gstance1', guard2: 'gstance2', crouch: 'gstance2' };
+  const SUB_SEQ = new Set(['hurtLow', 'hurtAir', 'power']);
 
   // ------------------------------------------------------------ cycles
   const TAU = Math.PI * 2;
@@ -1341,8 +1418,10 @@
   const easeOf = (seg) => EASE[seg[2] || (seg[1] <= 0.06 ? 'back' : 'inout')];
   const frameT = (t) => Math.round(t * FPS) / FPS;
   M.frameT = frameT;
-  M.pose = (anim, t = 0) => {
+  // sub (facultatif) : poses-clés remplacées dans les séquences ({ guard: 'astance1' }...)
+  M.pose = (anim, t = 0, sub = null) => {
     if (typeof anim !== 'string') return anim;
+    const KS = (n) => K[(sub && sub[n]) || n];
     t = frameT(t);
     const C = CYCLES[anim];
     if (C) {
@@ -1356,11 +1435,11 @@
         const d = S[i][1];
         if (t <= acc + d) {
           const u = d > 0 ? U.clamp((t - acc) / d, 0, 1) : 1;
-          return M.blend(K[S[i - 1][0]], K[S[i][0]], easeOf(S[i])(u));
+          return M.blend(KS(S[i - 1][0]), KS(S[i][0]), easeOf(S[i])(u));
         }
         acc += d;
       }
-      return K[S[S.length - 1][0]];
+      return KS(S[S.length - 1][0]);
     }
     return K[anim] || K.idle;
   };

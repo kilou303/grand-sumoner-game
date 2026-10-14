@@ -93,7 +93,7 @@
         '...........JOCCAAAAAACO............',
         '...........JOOEAAAAACCOA...........',
         '...........AEEOJPPPCOO.............',
-        '...........DAAALLLCLAA............S',
+        '...........DAAALLLCLAA.............',
         '...........A....DDJDHH.............',
         '...........A....ADJDHH.............',
         '................AADKMM.............',
@@ -147,7 +147,8 @@
         'ASDMHHHDDHA',
         '.PDHHH.HHAA',
       ] },
-      fist: { pivot: [2, -1], end: [1, 3], t: [
+      fist: { pivot: [2, 0], end: [1, 4], t: [
+        'S....',
         'HHHDS',
         'THHAA',
         'UHHAA',
@@ -220,7 +221,7 @@
         '........AAHHU',
         '........AAHHT',
         'AJA.....SDHHH',
-        'DJJJ.....HDD.',
+        'DJJJ.....HDDS',
         'DCOJJ...MDDD.',
         'DCOJJAAAMDDA.',
         'ACJJSAMMHH...',

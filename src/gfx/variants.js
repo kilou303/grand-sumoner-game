@@ -391,6 +391,8 @@
   // gardant les ombres du dessin d'origine.
   // spec.ref = { head, top, legs } (noms de modèles) ; couleurs : hair, skin, eyes, jacket,
   // inner, pants, shoes, metal, gem (lumières) ; arme comme le format de Djegui.
+  // garde du bras arrière (angles bras / coude) pour les hauts dont la planche le tend sur le côté
+  const REAR_GUARD = { combattant: { a: 0.45, e: 2.0 }, rodeur: { a: 0.45, e: 2.0 } };
   const REF_GROUP = { head: 'head', hairBack: 'head', thighF: 'legs', thighB: 'legs', shinF: 'legs', shinB: 'legs', shoe: 'legs' };
   const REF_COLOR = { hair: 'hair', skin: 'skin', eyes: 'eyes', jacket: 'jacket', inner: 'inner', pants: 'pants', shoes: 'shoes', metal: 'metal', glow: 'gem' };
   const toHsl = (h) => {
@@ -470,8 +472,17 @@
         parts[n] = { pivot: p.pivot, end: p.end, t: p.t.map((row) => [...row].map((c) => (c === '.' ? '.' : maps[g][c])).join('')) };
       }
     }
+    // haut à garde large (bras arrière tendu sur le côté, poing vers l'arrière) : le bras
+    // arrière prend une garde de boxe, dessiné avec les pièces du bras avant (celles du bras
+    // arrière sont découpées dans le bras tendu à l'horizontale)
+    const rearGuard = REAR_GUARD[ref.top] || null;
+    if (rearGuard) {
+      parts.armUpB = parts.armUpF;
+      parts.armLoB = parts.armLoF;
+    }
     const art = { pal, parts, joints: src.top.art.joints };
     return {
+      rearGuard,
       art,
       family,
       weapon: V.weapon(spec, V.paletteKeys(pal)),
@@ -491,6 +502,7 @@
       outline: 'A',
       frontArm: 'under',
       backArm: b.backArm,
+      rearGuard: b.rearGuard,
       shadeFamily: b.family,
       animMap: V.animMapFor(spec),
     });
